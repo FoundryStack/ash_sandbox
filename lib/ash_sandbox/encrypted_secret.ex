@@ -40,6 +40,18 @@ defmodule AshSandbox.EncryptedSecret do
       config :ash_sandbox, AshSandbox.EncryptedSecret,
         key: System.fetch_env!("SANDBOX_CREDENTIAL_KEY")
 
+  ## Why not `cloak`
+
+  `cloak`/`cloak_ecto` is the conventional Elixir answer and was considered and
+  rejected -- recorded in `003` data-model.md §Decision. The short form: this is
+  a *published library* (`012-FR-015`), so every dependency it declares is
+  inherited by every consumer, and imposing Cloak's vault configuration on
+  consumers who may hold no credentials at all is not worth 136 lines. The
+  accepted cost is the next paragraph.
+
+  Revisit if a requirement appears for key rotation without downtime, or if a
+  second encrypted attribute appears in these packages.
+
   This is deliberately not a key *rotation* mechanism. Rotating the encryption
   key means re-encrypting every row, which is a migration rather than a type
   concern — and distinct from `FR-020`'s credential rotation, which changes the
