@@ -56,18 +56,6 @@ defmodule AshSandbox.RegistryTemplate do
   # section has to exist when the resource's own macros expand, so a runtime
   # `if` around `postgres do ... end` fails to compile rather than being skipped.
   #
-  # Data-layer-specific, because a host on ETS or Mnesia is a legitimate Story 1
-  # consumer and must not be handed a `postgres` block.
-  defp data_layer_section(AshPostgres.DataLayer, table, repo) do
-    quote do
-      postgres do
-        table(unquote(table))
-        repo(unquote(repo))
-      end
-    end
-  end
-
-  defp data_layer_section(_other, _table, _repo), do: nil
 
   @doc false
   defmacro __using__(opts) do
@@ -89,7 +77,7 @@ defmodule AshSandbox.RegistryTemplate do
         data_layer: unquote(data_layer),
         extensions: unquote(extensions)
 
-      unquote(data_layer_section(data_layer, table, repo))
+      unquote(AshSandbox.Internal.DataLayerSection.build(data_layer, table, repo))
 
       attributes do
         # A plain string id, not `uuid_primary_key`: `ExSandbox.Sandbox.id` is
@@ -218,7 +206,26 @@ defmodule AshSandbox.RegistryTemplate do
         # `environment_ref` above. Declared here rather than left to the host
         # because a host that omitted it would silently lose FR-010 while every
         # test that provisions sequentially still passed.
-        identity :unique_environment, [:environment_ref], pre_check_with: unquote(domain)
+        # `pre_check_with` is set only for data layers that cannot enforce an
+        # identity themselves -- see `pre_check_with/2` below. Both branches
+        # were measured, and neither is a safe default:
+        #
+        #   * **With** it on PostgreSQL, Ash adds an `eager_validate_identities`
+        #     hook to the `before_action` phase of *every* action on this
+        #     resource, including updates that never touch `environment_ref`.
+        #     Any `before_action` hook makes an update non-atomic, so
+        #     `mark_provisioned`, `mark_running`, and the rest all failed with
+        #     `MustBeAtomic` -- the whole state machine was unusable.
+        #
+        #   * **Without** it on ETS, Ash's `RequirePreCheckWith` verifier
+        #     refuses to compile the resource at all, because ETS cannot enforce
+        #     a unique constraint and would silently permit duplicates.
+        #
+        # Both are `FR-009` in practice: the host chooses the data layer, so the
+        # library has to derive this from it rather than pick one.
+        identity :unique_environment,
+                 [:environment_ref],
+                 unquote(AshSandbox.Internal.DataLayerSection.pre_check_with(data_layer, domain))
       end
 
       actions do
@@ -252,13 +259,28 @@ defmodule AshSandbox.RegistryTemplate do
           upsert_fields []
 
           change set_attribute(:state, :provisioning)
+
+          # `&DateTime.utc_now/0` here and `expr(now())` on every `update`
+          # below. Not a stylistic inconsistency: `expr(now())` keeps an update
+          # atomic -- without it the function value adds a `before_action` hook
+          # and Ash refuses the action with `MustBeAtomic` -- but on a *create*
+          # there is no atomic path to preserve and the expression reaches the
+          # cast as an unevaluated `now()`, which fails with "could not cast
+          # input to datetime".
           change set_attribute(:state_changed_at, &DateTime.utc_now/0)
         end
 
         update :mark_provisioned do
-          accept [:mechanism_ref, :address]
+          # `data_store_ref` and `data_store_placement` are accepted here, not
+          # only at `:provision`, because they are not known when the row is
+          # created: the row is created *first* so that a crash mid-saga leaves
+          # something reconciliation can find, and the database it names does not
+          # exist yet at that point. Placement especially is a fact about where
+          # the sandbox actually landed (`013-FR-007c`) -- recorded when it is
+          # known rather than guessed when the row is opened.
+          accept [:mechanism_ref, :address, :data_store_ref, :data_store_placement]
           change set_attribute(:state, :provisioned)
-          change set_attribute(:state_changed_at, &DateTime.utc_now/0)
+          change atomic_update(:state_changed_at, expr(now()))
         end
 
         # `starting` is a distinct state, not a flag (`003-FR-024`, T012).
@@ -268,7 +290,7 @@ defmodule AshSandbox.RegistryTemplate do
         update :mark_starting do
           accept []
           change set_attribute(:state, :starting)
-          change set_attribute(:state_changed_at, &DateTime.utc_now/0)
+          change atomic_update(:state_changed_at, expr(now()))
         end
 
         # `address` is required here, not merely accepted: `003-FR-022` says a
@@ -285,13 +307,13 @@ defmodule AshSandbox.RegistryTemplate do
           change set_attribute(:state, :running)
           change set_attribute(:failure_reason, nil)
           change set_attribute(:failure_detail, nil)
-          change set_attribute(:state_changed_at, &DateTime.utc_now/0)
+          change atomic_update(:state_changed_at, expr(now()))
         end
 
         update :mark_stopping do
           accept []
           change set_attribute(:state, :stopping)
-          change set_attribute(:state_changed_at, &DateTime.utc_now/0)
+          change atomic_update(:state_changed_at, expr(now()))
         end
 
         # The address is cleared on stop. `start/1` returns a possibly-different
@@ -301,7 +323,7 @@ defmodule AshSandbox.RegistryTemplate do
           accept []
           change set_attribute(:state, :stopped)
           change set_attribute(:address, nil)
-          change set_attribute(:state_changed_at, &DateTime.utc_now/0)
+          change atomic_update(:state_changed_at, expr(now()))
         end
 
         update :mark_failed do
@@ -313,14 +335,14 @@ defmodule AshSandbox.RegistryTemplate do
           change set_attribute(:state, :failed)
           change set_attribute(:failure_reason, arg(:reason))
           change set_attribute(:failure_detail, arg(:detail))
-          change set_attribute(:state_changed_at, &DateTime.utc_now/0)
+          change atomic_update(:state_changed_at, expr(now()))
         end
 
         update :mark_destroyed do
           accept []
           change set_attribute(:state, :destroyed)
           change set_attribute(:address, nil)
-          change set_attribute(:state_changed_at, &DateTime.utc_now/0)
+          change atomic_update(:state_changed_at, expr(now()))
         end
 
         update :touch do
