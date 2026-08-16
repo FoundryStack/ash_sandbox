@@ -76,7 +76,11 @@ defmodule AshSandbox.SandboxCredentialTemplate do
           public?(true)
         end
 
-        attribute :secret, :string do
+        # `AshSandbox.EncryptedSecret` and `sensitive? true` protect against
+        # different readers and neither implies the other: the type encrypts
+        # the stored bytes, `sensitive?` keeps the decrypted value out of
+        # inspect and error output. A credential needs both.
+        attribute :secret, AshSandbox.EncryptedSecret do
           allow_nil?(false)
           sensitive?(true)
           # Not `public?`: it must not be readable through an owner-facing
@@ -126,7 +130,7 @@ defmodule AshSandbox.SandboxCredentialTemplate do
         update :rotate do
           description("Replaces the secret in place; the row and role survive (FR-020).")
 
-          argument :secret, :string do
+          argument :secret, AshSandbox.EncryptedSecret do
             allow_nil?(false)
             sensitive?(true)
           end
