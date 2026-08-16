@@ -37,6 +37,13 @@ defmodule AshSandbox.MixProject do
       # it. That is research R2's failure mode exactly: the violation is
       # invisible here and expensive there.
       {:plug, "~> 1.16"},
+      # Same rule as `plug` above, and the same failure mode. The templates
+      # emit `Ash.Policy.Authorizer` policies (003 T050), and Ash needs a SAT
+      # solver to evaluate them. The umbrella already has one via `axonn`, so
+      # this compiles and passes without the line -- then raises
+      # `Picosat.solve/1 is undefined` inside a consumer that has no solver of
+      # its own, on their first authorized read.
+      {:picosat_elixir, "~> 0.2"},
       {:ex_sandbox, in_umbrella: true}
     ]
   end

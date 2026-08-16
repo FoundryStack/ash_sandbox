@@ -105,7 +105,16 @@ defmodule AshSandbox.Plug do
     registry
     |> Ash.Query.filter(^ref(attribute) == ^hostname)
     |> Ash.Query.limit(1)
-    |> Ash.read()
+    # `authorize?: false` because this lookup *is* the owner resolution
+    # (003 T050). It runs before any owner is known -- discovering which owner
+    # a hostname belongs to is its entire job -- so there is no actor to
+    # authorize as, and an owner-filtered read here would match nothing and
+    # refuse every request.
+    #
+    # This is platform infrastructure rather than an owner-facing action, and
+    # the refusal that matters happens immediately below: `runnable/2` consults
+    # the host's run policy before anything is served.
+    |> Ash.read(authorize?: false)
     |> case do
       {:ok, [record]} -> runnable(registry, record)
       {:ok, []} -> {:error, :unregistered}

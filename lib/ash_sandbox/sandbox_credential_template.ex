@@ -62,7 +62,24 @@ defmodule AshSandbox.SandboxCredentialTemplate do
     sandbox_resource = Keyword.fetch!(opts, :sandbox_resource)
 
     quote do
-      use Ash.Resource, domain: unquote(domain), data_layer: unquote(data_layer)
+      use Ash.Resource,
+        domain: unquote(domain),
+        data_layer: unquote(data_layer),
+        authorizers: [Ash.Policy.Authorizer]
+
+      # `FR-021`, data-model.md §Authorization: the credential is **never**
+      # readable through an owner-facing action -- only by the provisioning path
+      # that injects it, which runs `authorize?: false`.
+      #
+      # This is stricter than the owner filter the other resources use, and
+      # deliberately so. "The owner may read its own credential" sounds
+      # reasonable and is the wrong rule: it puts every sandbox secret one
+      # actor-shaped request away from any code path that forwards a scope.
+      policies do
+        policy always() do
+          forbid_if(always())
+        end
+      end
 
       unquote(AshSandbox.Internal.DataLayerSection.build(data_layer, table, repo))
 

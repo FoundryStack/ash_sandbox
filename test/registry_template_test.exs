@@ -110,14 +110,15 @@ defmodule AshSandbox.RegistryTemplateTest do
         Ash.create(
           SandboxRegistry,
           %{id: id, owner_ref: "owner-1", environment_ref: id, template_ref: "tpl"},
-          action: :provision
+          action: :provision,
+          authorize?: false
         )
 
       assert record.state == :provisioning
 
       # Reading it back is what the falsified shape could never do -- with
       # `Ash.DataLayer.Simple` the create succeeds and nothing is stored.
-      assert {:ok, found} = Ash.get(SandboxRegistry, id)
+      assert {:ok, found} = Ash.get(SandboxRegistry, id, authorize?: false)
       assert found.owner_ref == "owner-1"
     end
 
@@ -134,7 +135,8 @@ defmodule AshSandbox.RegistryTemplateTest do
             template_ref: "tpl",
             memory_limit_mb: 256
           },
-          action: :provision
+          action: :provision,
+          authorize?: false
         )
 
       sandbox = SandboxRegistry.to_sandbox(record, %{trace: "abc"})
@@ -157,12 +159,14 @@ defmodule AshSandbox.RegistryTemplateTest do
 
       {:ok, first} =
         Ash.create(SandboxRegistry, %{id: "a", owner_ref: "o", environment_ref: env},
-          action: :provision
+          action: :provision,
+          authorize?: false
         )
 
       {:ok, second} =
         Ash.create(SandboxRegistry, %{id: "b", owner_ref: "o", environment_ref: env},
-          action: :provision
+          action: :provision,
+          authorize?: false
         )
 
       # The loser gets the winner's row, not its own. Without this, the second
@@ -177,14 +181,16 @@ defmodule AshSandbox.RegistryTemplateTest do
         Ash.create(
           SandboxRegistry,
           %{id: "a", owner_ref: "o", environment_ref: env, template_ref: "elixir-1.20"},
-          action: :provision
+          action: :provision,
+          authorize?: false
         )
 
       {:ok, second} =
         Ash.create(
           SandboxRegistry,
           %{id: "b", owner_ref: "o", environment_ref: env, template_ref: "python-3.13"},
-          action: :provision
+          action: :provision,
+          authorize?: false
         )
 
       # `upsert_fields []` is why. A late arrival must not stamp its own
@@ -201,12 +207,14 @@ defmodule AshSandbox.RegistryTemplateTest do
       # attribute is what prevents it; this test is what would notice.
       {:ok, a} =
         Ash.create(SandboxRegistry, %{id: "x", owner_ref: "o1", environment_ref: "env-x"},
-          action: :provision
+          action: :provision,
+          authorize?: false
         )
 
       {:ok, b} =
         Ash.create(SandboxRegistry, %{id: "y", owner_ref: "o2", environment_ref: "env-y"},
-          action: :provision
+          action: :provision,
+          authorize?: false
         )
 
       refute a.id == b.id
@@ -214,7 +222,10 @@ defmodule AshSandbox.RegistryTemplateTest do
 
     test "environment_ref cannot be omitted" do
       assert {:error, _} =
-               Ash.create(SandboxRegistry, %{id: "z", owner_ref: "o"}, action: :provision)
+               Ash.create(SandboxRegistry, %{id: "z", owner_ref: "o"},
+                 action: :provision,
+                 authorize?: false
+               )
     end
   end
 end

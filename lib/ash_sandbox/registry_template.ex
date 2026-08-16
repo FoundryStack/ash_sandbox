@@ -75,7 +75,25 @@ defmodule AshSandbox.RegistryTemplate do
       use Ash.Resource,
         domain: unquote(domain),
         data_layer: unquote(data_layer),
-        extensions: unquote(extensions)
+        extensions: unquote(extensions),
+        authorizers: [Ash.Policy.Authorizer]
+
+      # Load-bearing, not defensive (003 T050, data-model.md §Authorization).
+      #
+      # Wherever a host places these records they are not schema-isolated the
+      # way `002`'s tenant data is, so this policy is the *only* thing between
+      # two tenants. That is materially weaker than placement-based isolation
+      # and the reason these rules get their own test rather than being taken
+      # on trust.
+      policies do
+        # Platform work -- reconciliation, capacity queries, orphan sweeps --
+        # runs with no actor and legitimately spans owners (research R5). It is
+        # reached by `authorize?: false` at the call site rather than by a
+        # bypass here, so an actor-carrying request can never take this path.
+        policy always() do
+          authorize_if(AshSandbox.Internal.OwnerCheck)
+        end
+      end
 
       unquote(AshSandbox.Internal.DataLayerSection.build(data_layer, table, repo))
 
@@ -93,6 +111,14 @@ defmodule AshSandbox.RegistryTemplate do
         attribute :owner_ref, :string do
           allow_nil? false
           public? true
+
+          # `trim?: false` because `owner_ref` is **opaque** (`012-FR-003`).
+          # Ash's `:string` trims by default, which is right for a name a human
+          # typed and wrong for an identifier the host owns: it silently
+          # rewrites the value, so a record stored under one reference is
+          # looked up under another and two owners whose references differ only
+          # in surrounding whitespace collapse into one.
+          constraints trim?: false, allow_empty?: true
         end
 
         attribute :template_ref, :string, public?: true

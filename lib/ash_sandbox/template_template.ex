@@ -27,7 +27,31 @@ defmodule AshSandbox.TemplateTemplate do
     repo = Keyword.get(opts, :repo)
 
     quote do
-      use Ash.Resource, domain: unquote(domain), data_layer: unquote(data_layer)
+      use Ash.Resource,
+        domain: unquote(domain),
+        data_layer: unquote(data_layer),
+        authorizers: [Ash.Policy.Authorizer]
+
+      # Readable by any permitted owner, writable only by platform admin
+      # (data-model.md §Authorization, `FR-008`).
+      #
+      # Templates are shared infrastructure rather than tenant data: they carry
+      # no `owner_ref`, so the owner filter the other resources use has nothing
+      # to compare. Any actor may read; writes go through `authorize?: false`,
+      # which is how platform-admin work is expressed here.
+      #
+      # "Any permitted owner" rather than "any active tenant" is deliberate --
+      # activeness is a lifecycle concept the library does not have
+      # (`012-FR-008`).
+      policies do
+        policy action_type(:read) do
+          authorize_if(always())
+        end
+
+        policy always() do
+          forbid_if(always())
+        end
+      end
 
       unquote(AshSandbox.Internal.DataLayerSection.build(data_layer, table, repo))
 

@@ -27,7 +27,8 @@ defmodule AshSandbox.PlugTest do
         environment_ref: "env-" <> hostname,
         template_ref: "elixir-1.20"
       },
-      action: :provision
+      action: :provision,
+      authorize?: false
     )
   end
 
@@ -76,7 +77,8 @@ defmodule AshSandbox.PlugTest do
           environment_ref: "env-" <> hostname,
           template_ref: "elixir-1.20"
         },
-        action: :provision
+        action: :provision,
+        authorize?: false
       )
 
       # The record resolves perfectly well. The host has simply said no, and
@@ -132,7 +134,7 @@ defmodule AshSandbox.PlugTest do
 
       assert {:ok, _} = AshSandbox.Plug.resolve(hostname, @opts)
 
-      Ash.destroy!(record)
+      Ash.destroy!(record, authorize?: false)
 
       # A stale route here is a cross-tenant breach, not a correctness bug: the
       # next tenant to claim this hostname would receive the previous tenant's

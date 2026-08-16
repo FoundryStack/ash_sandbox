@@ -46,7 +46,19 @@ defmodule AshSandbox.OperationRecordTemplate do
     repo = Keyword.get(opts, :repo)
 
     quote do
-      use Ash.Resource, domain: unquote(domain), data_layer: unquote(data_layer)
+      use Ash.Resource,
+        domain: unquote(domain),
+        data_layer: unquote(data_layer),
+        authorizers: [Ash.Policy.Authorizer]
+
+      # Load-bearing (003 T050): these records are not schema-isolated, so this
+      # filter is the only boundary between two owners. Platform work reaches
+      # them with `authorize?: false` rather than through a bypass.
+      policies do
+        policy always() do
+          authorize_if(AshSandbox.Internal.OwnerCheck)
+        end
+      end
 
       unquote(AshSandbox.Internal.DataLayerSection.build(data_layer, table, repo))
 
