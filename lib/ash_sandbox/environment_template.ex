@@ -87,6 +87,25 @@ defmodule AshSandbox.EnvironmentTemplate do
         # Only meaningful when `on_demand` -- see the validation below.
         attribute(:idle_timeout_seconds, :integer, public?: true)
 
+        # `005-FR-011a`, `013-FR-014b`. The destinations a sandbox in this
+        # environment may reach, as `"host:port"` or `"host:*"` strings.
+        #
+        # ⚠️ **`nil` and `[]` mean the same thing here -- reach nothing -- and
+        # that is deliberate.** The alternative reading, "unset means
+        # unrestricted", would make an environment created before this
+        # attribute existed silently unconfined, which is the migration that
+        # grants access nobody granted. Default-deny has to survive its own
+        # rollout.
+        #
+        # Parsed by `ExSandbox.Egress.Allowlist.parse/1` at provision time
+        # rather than validated here: the parser is what the enforcement path
+        # actually uses, and a second validation written against the same
+        # strings would be a second opinion that can drift from it.
+        attribute :network_allowlist, {:array, :string} do
+          allow_nil?(true)
+          public?(true)
+        end
+
         create_timestamp(:inserted_at)
         update_timestamp(:updated_at)
       end
