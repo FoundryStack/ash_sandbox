@@ -60,6 +60,17 @@ defmodule AshSandbox.EnvironmentTemplate do
       attributes do
         uuid_v7_primary_key(:id)
 
+        # Denormalized from the owning `Project` at create time by
+        # `AshSandbox.Internal.CopyOwnerRefFromProject` (018 Phase 1 T001-T003).
+        # Opaque, same as `AshSandbox.ProjectTemplate`'s own `owner_ref` --
+        # required so `AshSandbox.Internal.OwnerCheck`'s policy filter (which
+        # every `*Template` in this library shares) has a column to compare
+        # against without joining through `project` on every read.
+        attribute :owner_ref, :string do
+          allow_nil?(false)
+          public?(true)
+        end
+
         attribute :name, :string do
           allow_nil?(false)
           public?(true)
@@ -134,6 +145,10 @@ defmodule AshSandbox.EnvironmentTemplate do
           where(attribute_equals(:availability_mode, :on_demand))
           message("an on_demand environment needs an idle timeout (003-FR-016)")
         end
+      end
+
+      changes do
+        change {AshSandbox.Internal.CopyOwnerRefFromProject, []}, on: [:create]
       end
 
       actions do
