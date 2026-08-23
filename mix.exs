@@ -60,7 +60,9 @@ defmodule AshSandbox.MixProject do
     [
       precommit: [
         "compile --warnings-as-errors --force",
-        "deps.unlock --unused",
+        # A mutation exits 0 and therefore cannot gate; `--check-unused`
+        # is the check. `format --check-formatted` below was already right.
+        "deps.unlock --check-unused",
         "format --check-formatted",
         "test"
       ]
