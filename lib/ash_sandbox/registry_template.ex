@@ -52,6 +52,36 @@ defmodule AshSandbox.RegistryTemplate do
   force one on every host.
   """
 
+  @doc """
+  The states in which a sandbox is **live** — it exists as far as its mechanism
+  is concerned, whether or not it is serving traffic yet.
+
+  ⚠️ **Enumerated, never expressed as "not stopped"** (029 T018 ruling). `state`
+  below is a closed set precisely so that a state added later has to be
+  classified deliberately: a negation would silently sort a new state into
+  *settled*, and the one caller of this list refuses a write while a sandbox is
+  live. `Axonn.Sandbox.EnvironmentAllowlistUpdateTest`'s partition test fails if
+  the two lists here stop covering the constraint exactly. (It lives in the host
+  because `AshSandbox.EnvironmentTemplate` cannot be exercised on this library's
+  own ETS fixtures — see that module.)
+
+  `:stopping` is live. A sandbox being torn down still has whatever its
+  mechanism installed at launch, and it can still reach the network until the
+  teardown completes.
+  """
+  @spec live_states() :: [atom()]
+  def live_states, do: [:provisioning, :provisioned, :starting, :running, :stopping]
+
+  @doc """
+  The states in which a sandbox is **settled** — nothing is running under the
+  rules it was launched with.
+
+  The complement of `live_states/0` over `state`'s closed set, written out
+  rather than derived, so that both halves have to be edited when the set grows.
+  """
+  @spec settled_states() :: [atom()]
+  def settled_states, do: [:stopped, :failed, :destroyed]
+
   # Emitted at macro-expansion time, not at runtime inside the quote: a DSL
   # section has to exist when the resource's own macros expand, so a runtime
   # `if` around `postgres do ... end` fails to compile rather than being skipped.
@@ -151,6 +181,10 @@ defmodule AshSandbox.RegistryTemplate do
         # (contracts/mechanism.md §start/1).
         attribute :address, :string, public?: true
 
+        # ⚠️ Adding a value here means classifying it in `live_states/0` or
+        # `settled_states/0` above. Nothing infers the classification, and a
+        # state left out of both fails the partition test named there rather
+        # than being treated as safe-to-update by default.
         attribute :state, :atom do
           allow_nil? false
           default :provisioning

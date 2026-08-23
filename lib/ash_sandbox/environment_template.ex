@@ -8,7 +8,8 @@ defmodule AshSandbox.EnvironmentTemplate do
           domain: MyApp.Sandboxes,
           repo: MyApp.Repo,
           table: "environments",
-          project_resource: MyApp.Project
+          project_resource: MyApp.Project,
+          registry_resource: MyApp.SandboxRegistry
       end
 
   `preview`, `staging`, `production` — backed by exactly one sandbox.
@@ -30,6 +31,37 @@ defmodule AshSandbox.EnvironmentTemplate do
   empty environment (`003-FR-008`, spec edge case). Validating its existence at
   creation time would be worse, not better: templates are built out of band and
   may be registered after an environment references one.
+
+  ## `registry_resource` is required, and it is what makes the allowlist writable
+
+  `update` accepts `:network_allowlist` and **refuses while the environment has
+  a live sandbox** (029 T018 ruling) — see
+  `AshSandbox.Internal.RefuseAllowlistChangeWhileLive` for why refusing is the
+  honest shape. Deciding liveness means reading the host's registry, and the
+  host names its own binding here rather than this library naming a module it
+  cannot know (`012-FR-009`).
+
+  ⚠️ **Required rather than optional, on purpose.** An optional reference has
+  two shapes, and both are worse. Without it the guard is skipped — a control
+  that reports success and changes nothing, the exact defect this exists to
+  prevent — or the field silently stays unwritable and an operator meets "no
+  such input" with nothing telling them why. A missing option is instead a
+  compile error naming what to pass. (`012-FR-015` makes this a breaking change
+  to a public interface; that requirement is deferred until a version is
+  published, and there is no published version.)
+
+  ## ⚠️ This template's tests live in the host, and not by preference
+
+  MEASURED 2026-08-23: `identity(:unique_name_per_project, ...)` below carries no
+  `pre_check_with`, so a host on ETS or Mnesia cannot compile this resource at
+  all — `Ash.DataLayer.Verifiers.RequirePreCheckWith` refuses it with *"the data
+  layer does not support native checking of identities"*. That makes this
+  template AshPostgres-only in practice, which `012-FR-009` says it should not
+  be, and it is why `ash_sandbox`'s own ETS `HostApp` fixtures bind a registry
+  and no environment. `AshSandbox.RegistryTemplate` solves the same problem with
+  `AshSandbox.Internal.DataLayerSection.pre_check_with/2`; the fix here is the
+  same one line and is deliberately **not** folded into `029 T018` — it changes
+  which hosts can compile, which is a different question from this write path.
   """
 
   @doc false
@@ -39,6 +71,7 @@ defmodule AshSandbox.EnvironmentTemplate do
     table = Keyword.fetch!(opts, :table)
     repo = Keyword.get(opts, :repo)
     project_resource = Keyword.fetch!(opts, :project_resource)
+    registry_resource = Keyword.fetch!(opts, :registry_resource)
 
     quote do
       use Ash.Resource,
@@ -172,21 +205,48 @@ defmodule AshSandbox.EnvironmentTemplate do
           ])
         end
 
-        # ⚠️ **`:network_allowlist` is deliberately NOT accepted here, and the
-        # omission is a deferred question rather than an oversight.** A sandbox
-        # is policed by nftables rules installed at launch from the allowlist as
-        # it read then; nothing re-reads it afterwards. Accepting it on `update`
-        # would let an operator narrow an environment's allowlist and see the
-        # change persisted while every sandbox already running kept the wider
-        # rules -- a control that reports success and changes nothing, which is
-        # worse than one that cannot be reached at all.
+        # ⚠️ **`:network_allowlist` is accepted here, and refused while a
+        # sandbox for this environment is live** (029 T018 ruling, resolving the
+        # question this comment used to hold open). A sandbox is policed by
+        # rules its mechanism installs at launch from the allowlist as it read
+        # *then*; nothing re-reads it afterwards. Accepting the field unguarded
+        # would let an operator narrow an allowlist and see the change persisted
+        # while every running sandbox kept the wider rules -- a control that
+        # reports success and changes nothing. Widening is the mirror: recorded,
+        # and unreachable until the sandbox is replaced.
         #
-        # Widening has the mirror problem: the new destination is recorded and
-        # unreachable until the sandbox is replaced. Either direction needs a
-        # decision about re-policing or refusing while sandboxes are live, and
-        # that decision belongs with `029`'s enforcement work rather than here.
+        # Re-policing the running sandbox instead of refusing is the better
+        # product answer and was not chosen: rewriting a live ruleset is its own
+        # correctness problem, and `029` has not yet shown that the rules it
+        # installs at launch hold at all -- the observation halves of its
+        # enforcement tasks need a Linux network namespace and have never run.
+        # `AshSandbox.Internal.RefuseAllowlistChangeWhileLive` carries the rest.
         update :update do
-          accept([:availability_mode, :idle_timeout_seconds, :template_name])
+          # ⚠️ Needed, and only for the validation below. Deciding whether this
+          # environment has a live sandbox is a read of another resource, which
+          # no expression over this row can express -- so the validation has no
+          # `atomic/3` and Ash would otherwise refuse the action with
+          # `MustBeAtomic`. Scoped to this action rather than the `validations`
+          # block so `:read` and `:destroy` keep their own paths untouched.
+          #
+          # ⚠️ Left unfixed, deliberately: this is a check-then-act, so a launch
+          # that commits between the read and the write still leaves a narrowed
+          # allowlist beside a sandbox running the wider rules. Closing it needs
+          # the launch path to take the environment row under lock, which is
+          # `029`'s enforcement work rather than this write path's.
+          require_atomic?(false)
+
+          accept([
+            :availability_mode,
+            :idle_timeout_seconds,
+            :template_name,
+            :network_allowlist
+          ])
+
+          validate(
+            {AshSandbox.Internal.RefuseAllowlistChangeWhileLive,
+             registry_resource: unquote(registry_resource)}
+          )
         end
       end
     end
