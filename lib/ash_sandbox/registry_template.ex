@@ -206,6 +206,25 @@ defmodule AshSandbox.RegistryTemplate do
         # the right one; **not** for callers to branch on (Principle VI).
         attribute :mechanism, :atom, public?: true
 
+        # What the host this sandbox was launched on could actually enforce
+        # (`029-FR-040`), as `ExSandbox.Hardening.tier/0` measured it at
+        # provision time.
+        #
+        # ⚠️ **Recorded, never derived** -- the same rule as
+        # `data_store_placement` above, for a sharper reason. A tier computed
+        # when the row is *read* describes the host doing the reading, so a
+        # sandbox provisioned on a reduced host reads as fully enforced from
+        # anywhere that is not reduced. `FR-040`'s whole point is that "a
+        # reduced tier that is not recorded is indistinguishable from an
+        # enforced one".
+        #
+        # ⚠️ Paired with `mechanism` above and useless without it. The tier
+        # names what the *host* could enforce; the mechanism names who was
+        # asked to do the enforcing. A second mechanism will eventually write
+        # this field, and a tier with no mechanism beside it does not say whose
+        # enforcement it describes.
+        attribute :enforcement_tier, :string, public?: true
+
         # The sandbox's own logical database (`013-FR-007`) and which server
         # holds it (`013-FR-007c`).
         #
@@ -267,6 +286,7 @@ defmodule AshSandbox.RegistryTemplate do
             :memory_limit_mb,
             :disk_quota_mb,
             :mechanism,
+            :enforcement_tier,
             :data_store_ref,
             :data_store_placement
           ]
