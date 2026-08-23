@@ -155,16 +155,36 @@ defmodule AshSandbox.EnvironmentTemplate do
         defaults([:read, :destroy])
 
         create :create do
+          # ⚠️ `:network_allowlist` was declared above, made public and made
+          # writable, and then accepted by no action -- so the only way to set
+          # it was to build the environment map by hand, which is what every
+          # test did and no operator can. `029-FR-011` names that shape
+          # exactly: *a control that cannot be configured is not a control*.
+          # Every map-built provision test passed over the gap.
           accept([
             :project_id,
             :name,
             :availability_mode,
             :target_stack,
             :template_name,
-            :idle_timeout_seconds
+            :idle_timeout_seconds,
+            :network_allowlist
           ])
         end
 
+        # ⚠️ **`:network_allowlist` is deliberately NOT accepted here, and the
+        # omission is a deferred question rather than an oversight.** A sandbox
+        # is policed by nftables rules installed at launch from the allowlist as
+        # it read then; nothing re-reads it afterwards. Accepting it on `update`
+        # would let an operator narrow an environment's allowlist and see the
+        # change persisted while every sandbox already running kept the wider
+        # rules -- a control that reports success and changes nothing, which is
+        # worse than one that cannot be reached at all.
+        #
+        # Widening has the mirror problem: the new destination is recorded and
+        # unreachable until the sandbox is replaced. Either direction needs a
+        # decision about re-policing or refusing while sandboxes are live, and
+        # that decision belongs with `029`'s enforcement work rather than here.
         update :update do
           accept([:availability_mode, :idle_timeout_seconds, :template_name])
         end
