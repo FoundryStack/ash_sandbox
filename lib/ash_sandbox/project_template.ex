@@ -73,7 +73,15 @@ defmodule AshSandbox.ProjectTemplate do
         # constraint would let one owner's choice of project name deny it to
         # every other owner -- an observable cross-owner effect, which is
         # precisely what FR-002 forbids.
-        identity(:unique_name_per_owner, [:owner_ref, :name])
+        # `pre_check_with` is derived from the data layer rather than fixed --
+        # see `AshSandbox.Internal.DataLayerSection.pre_check_with/2` and the
+        # measurements recorded above `RegistryTemplate`'s `:unique_environment`
+        # identity. Hardcoding either branch loses a data layer: without it an
+        # ETS host cannot compile the resource, with it a PostgreSQL host loses
+        # atomic updates.
+        identity :unique_name_per_owner,
+                 [:owner_ref, :name],
+                 unquote(AshSandbox.Internal.DataLayerSection.pre_check_with(data_layer, domain))
       end
 
       actions do

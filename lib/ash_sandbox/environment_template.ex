@@ -162,7 +162,12 @@ defmodule AshSandbox.EnvironmentTemplate do
       end
 
       identities do
-        identity(:unique_name_per_project, [:project_id, :name])
+        # Same derivation as `ProjectTemplate`'s identity, for the same reason
+        # (`012-FR-009`): the host picks the data layer, so the library reads
+        # `pre_check_with` off it instead of choosing for the host.
+        identity :unique_name_per_project,
+                 [:project_id, :name],
+                 unquote(AshSandbox.Internal.DataLayerSection.pre_check_with(data_layer, domain))
       end
 
       validations do

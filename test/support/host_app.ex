@@ -18,7 +18,34 @@ defmodule AshSandbox.HostApp.Sandboxes do
     resource AshSandbox.HostApp.SandboxRegistry
     resource AshSandbox.HostApp.BareRegistry
     resource AshSandbox.HostApp.RefusingRegistry
+    resource AshSandbox.HostApp.Project
+    resource AshSandbox.HostApp.Environment
   end
+end
+
+defmodule AshSandbox.HostApp.Project do
+  @moduledoc """
+  The host's project resource, on ETS rather than AshPostgres.
+
+  Its existence is the assertion: `ProjectTemplate` declares a unique identity,
+  and a template that hardcoded the PostgreSQL treatment of one would refuse to
+  compile here (`012-FR-009`).
+  """
+  use AshSandbox.ProjectTemplate,
+    data_layer: Ash.DataLayer.Ets,
+    domain: AshSandbox.HostApp.Sandboxes,
+    table: "host_projects"
+end
+
+defmodule AshSandbox.HostApp.Environment do
+  @moduledoc """
+  The host's environment resource, on ETS, pointed at the host's own project.
+  """
+  use AshSandbox.EnvironmentTemplate,
+    data_layer: Ash.DataLayer.Ets,
+    domain: AshSandbox.HostApp.Sandboxes,
+    table: "host_environments",
+    project_resource: AshSandbox.HostApp.Project
 end
 
 defmodule AshSandbox.HostApp.SandboxRegistry do
