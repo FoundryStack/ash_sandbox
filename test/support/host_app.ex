@@ -45,7 +45,8 @@ defmodule AshSandbox.HostApp.Environment do
     data_layer: Ash.DataLayer.Ets,
     domain: AshSandbox.HostApp.Sandboxes,
     table: "host_environments",
-    project_resource: AshSandbox.HostApp.Project
+    project_resource: AshSandbox.HostApp.Project,
+    registry_resource: AshSandbox.HostApp.SandboxRegistry
 end
 
 defmodule AshSandbox.HostApp.SandboxRegistry do

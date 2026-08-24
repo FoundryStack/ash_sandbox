@@ -50,18 +50,16 @@ defmodule AshSandbox.EnvironmentTemplate do
   to a public interface; that requirement is deferred until a version is
   published, and there is no published version.)
 
-  ## ⚠️ This template's tests live in the host, and not by preference
+  ## `:unique_name_per_project` compiles on any data layer
 
-  MEASURED 2026-08-23: `identity(:unique_name_per_project, ...)` below carries no
-  `pre_check_with`, so a host on ETS or Mnesia cannot compile this resource at
-  all — `Ash.DataLayer.Verifiers.RequirePreCheckWith` refuses it with *"the data
-  layer does not support native checking of identities"*. That makes this
-  template AshPostgres-only in practice, which `012-FR-009` says it should not
-  be, and it is why `ash_sandbox`'s own ETS `HostApp` fixtures bind a registry
-  and no environment. `AshSandbox.RegistryTemplate` solves the same problem with
-  `AshSandbox.Internal.DataLayerSection.pre_check_with/2`; the fix here is the
-  same one line and is deliberately **not** folded into `029 T018` — it changes
-  which hosts can compile, which is a different question from this write path.
+  Its `pre_check_with` is derived from the host's data layer, the same way
+  `AshSandbox.RegistryTemplate`'s `:unique_environment` identity derives it —
+  see `AshSandbox.Internal.DataLayerSection.pre_check_with/2` for both branches
+  and why neither is a safe default. Without this, `Ash.DataLayer.Verifiers.RequirePreCheckWith`
+  refused to compile the resource on any data layer that cannot enforce a
+  unique identity itself (ETS, Mnesia), which made this template AshPostgres-only
+  in practice and contradicted `012-FR-009`. `ash_sandbox`'s own ETS `HostApp`
+  fixtures now bind a `Project` and `Environment`, not only a registry.
   """
 
   @doc false
