@@ -60,9 +60,20 @@ defmodule AshSandbox.MixProject do
     [
       precommit: [
         "compile --warnings-as-errors --force",
-        # A mutation exits 0 and therefore cannot gate; `--check-unused`
-        # is the check. `format --check-formatted` below was already right.
-        "deps.unlock --check-unused",
+        # No `deps.unlock --check-unused` here. This app's `lockfile` points at
+        # the umbrella's SHARED `../../mix.lock`, so the check can only ever be
+        # meaningful when run against every app's `deps()` at once -- which is
+        # exactly what root `mix.exs`'s own `precommit` alias does, and its gate
+        # already covers this file. Run scoped to just this directory (as CI's
+        # library-boundary job does, deliberately, so a root-level `deps.get`
+        # doesn't leave this child unlocked) it sees only `deps/0` below and
+        # reports every package the REST of the umbrella needs -- phoenix,
+        # ash_postgres, oban, all of it -- as unused. Not flaky: MEASURED, it
+        # fails 100% of the time. It used to "pass" here because the alias ran
+        # the mutating `deps.unlock --unused` instead, which -- per the root
+        # `mix.exs` comment on the same anti-pattern -- exits 0 regardless of
+        # what it finds and so was never actually gating anything.
+        "format --check-formatted",
         "format --check-formatted",
         "test"
       ]
