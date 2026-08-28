@@ -44,7 +44,12 @@ defmodule AshSandbox.MixProject do
       # `Picosat.solve/1 is undefined` inside a consumer that has no solver of
       # its own, on their first authorized read.
       {:picosat_elixir, "~> 0.2"},
-      {:ex_sandbox, in_umbrella: true}
+      # ⚠️ `~> 1.0.1`, not `~> 1.0`, and the patch floor is load-bearing.
+      # 1.0.0 shipped `boundary.md` where `Application.app_dir/2` cannot reach
+      # it and `ExSandbox.LoopFormatter` in `test/`, which `package/0` does not
+      # publish. `library_boundary_test.exs` reads the first and two Mix tasks
+      # here name the second, so this umbrella does not work against 1.0.0.
+      {:ex_sandbox, "~> 1.0.1"}
     ]
   end
 
@@ -73,7 +78,7 @@ defmodule AshSandbox.MixProject do
         # the mutating `deps.unlock --unused` instead, which -- per the root
         # `mix.exs` comment on the same anti-pattern -- exits 0 regardless of
         # what it finds and so was never actually gating anything.
-        "format --check-formatted",
+        # ⚠️ It was listed twice, which did nothing the once did not.
         "format --check-formatted",
         "test"
       ]
