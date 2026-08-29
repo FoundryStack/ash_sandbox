@@ -232,6 +232,18 @@ defmodule AshSandbox.RegistryTemplate do
         # Opaque mechanism handle.
         attribute :mechanism_ref, :string, public?: true
 
+        # The port an application inside the sandbox listens on, or null for a
+        # sandbox that runs no reachable application (`003-FR-022`,
+        # `studio/FR-007`). What the *host* port ends up being is the
+        # mechanism's to choose and is recorded in `address` once it starts;
+        # this is the container's side of that mapping, and a sandbox that
+        # names none is published nowhere at all.
+        #
+        # Set by the platform when the sandbox is opened, never by a request:
+        # it is a fact about what the platform put inside the sandbox, which no
+        # caller is in a position to know.
+        attribute :service_port, :integer, public?: true
+
         attribute :cpu_limit, :integer, public?: true
         attribute :memory_limit_mb, :integer, public?: true
         attribute :disk_quota_mb, :integer, public?: true
@@ -316,6 +328,7 @@ defmodule AshSandbox.RegistryTemplate do
             :owner_ref,
             :template_ref,
             :environment_ref,
+            :service_port,
             :cpu_limit,
             :memory_limit_mb,
             :disk_quota_mb,
@@ -460,6 +473,7 @@ defmodule AshSandbox.RegistryTemplate do
           memory_limit_mb: record.memory_limit_mb,
           disk_quota_mb: record.disk_quota_mb,
           mechanism_ref: record.mechanism_ref,
+          service_port: record.service_port,
           context: context
         }
       end
