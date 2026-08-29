@@ -49,7 +49,16 @@ defmodule AshSandbox.MixProject do
       # it and `ExSandbox.LoopFormatter` in `test/`, which `package/0` does not
       # publish. `library_boundary_test.exs` reads the first and two Mix tasks
       # here name the second, so this umbrella does not work against 1.0.0.
-      {:ex_sandbox, "~> 1.0.1"}
+      # ⚠️ **TEMPORARY, and task 4.6 is what removes it.** 1.2.0 adds the
+      # `address/1` callback and the loopback port publish that groups 5, 8 and
+      # 9 are built on, and it is not on Hex yet -- publishing needs the
+      # maintainer's two-factor code. The operator chose to unblock the work
+      # against the local checkout and publish afterwards.
+      #
+      # The path is absolute on purpose: a relative one would be correct in
+      # exactly one checkout, and this repository is worked in git worktrees.
+      # Restore `{:ex_sandbox, "~> 1.2"}` the moment 1.2.0 is published.
+      {:ex_sandbox, path: "/Users/maxsvargal/Documents/Projects/ex_sandbox", override: true}
     ]
   end
 
