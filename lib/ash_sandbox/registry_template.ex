@@ -244,6 +244,17 @@ defmodule AshSandbox.RegistryTemplate do
         # caller is in a position to know.
         attribute :service_port, :integer, public?: true
 
+        # The host directory the sandbox's filesystem is opened over, or null
+        # for a sandbox with no shared workspace. The agent writes here and the
+        # application inside the sandbox reads the same bytes, which is what
+        # makes an edit visible to a running server without a copy step.
+        #
+        # ⚠️ Absolute, and the platform's to derive -- never a path a request
+        # supplies. A caller-supplied path is a caller-chosen mount of the
+        # host's filesystem into a container, which is not a workspace feature
+        # but an escape from every confinement above.
+        attribute :workspace_path, :string, public?: true
+
         attribute :cpu_limit, :integer, public?: true
         attribute :memory_limit_mb, :integer, public?: true
         attribute :disk_quota_mb, :integer, public?: true
@@ -329,6 +340,7 @@ defmodule AshSandbox.RegistryTemplate do
             :template_ref,
             :environment_ref,
             :service_port,
+            :workspace_path,
             :cpu_limit,
             :memory_limit_mb,
             :disk_quota_mb,
@@ -474,6 +486,7 @@ defmodule AshSandbox.RegistryTemplate do
           disk_quota_mb: record.disk_quota_mb,
           mechanism_ref: record.mechanism_ref,
           service_port: record.service_port,
+          workspace_path: record.workspace_path,
           context: context
         }
       end
