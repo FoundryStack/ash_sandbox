@@ -44,21 +44,14 @@ defmodule AshSandbox.MixProject do
       # `Picosat.solve/1 is undefined` inside a consumer that has no solver of
       # its own, on their first authorized read.
       {:picosat_elixir, "~> 0.2"},
-      # ⚠️ `~> 1.0.1`, not `~> 1.0`, and the patch floor is load-bearing.
-      # 1.0.0 shipped `boundary.md` where `Application.app_dir/2` cannot reach
-      # it and `ExSandbox.LoopFormatter` in `test/`, which `package/0` does not
-      # publish. `library_boundary_test.exs` reads the first and two Mix tasks
-      # here name the second, so this umbrella does not work against 1.0.0.
-      # ⚠️ **TEMPORARY, and task 4.6 is what removes it.** 1.2.0 adds the
-      # `address/1` callback and the loopback port publish that groups 5, 8 and
-      # 9 are built on, and it is not on Hex yet -- publishing needs the
-      # maintainer's two-factor code. The operator chose to unblock the work
-      # against the local checkout and publish afterwards.
-      #
-      # The path is absolute on purpose: a relative one would be correct in
-      # exactly one checkout, and this repository is worked in git worktrees.
-      # Restore `{:ex_sandbox, "~> 1.2"}` the moment 1.2.0 is published.
-      {:ex_sandbox, path: "/Users/maxsvargal/Documents/Projects/ex_sandbox", override: true}
+      # ⚠️ `~> 1.2`, not `~> 1.0.1`: 1.2.0 adds the `address/1` callback and
+      # the loopback port publish that groups 5, 8 and 9 are built on. It was
+      # briefly an absolute path dependency while 1.2.0 waited on the
+      # maintainer's two-factor code; it published 2026-08-31 and the path is
+      # gone, which is what `DependencyAndGateTest` refuses to let regress --
+      # a path resolves on the machine that wrote it and nowhere else, and this
+      # repository is worked in git worktrees.
+      {:ex_sandbox, "~> 1.2"}
     ]
   end
 
