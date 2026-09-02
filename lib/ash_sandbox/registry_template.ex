@@ -94,12 +94,13 @@ defmodule AshSandbox.RegistryTemplate do
     table = Keyword.fetch!(opts, :table)
     repo = Keyword.get(opts, :repo)
 
-    # `AshSandbox.Resource` is a Spark extension, and a Spark extension must be
-    # passed to `use Ash.Resource` -- it cannot be `use`d on its own line
-    # afterward, because its DSL sections have to be present when the resource's
-    # own macros expand. Since the template owns that call, it adds it here,
-    # and the host gets the `sandbox do ... end` block for free.
-    extensions = [AshSandbox.Resource | Keyword.get(opts, :extensions, [])]
+    # ⚠️ WAS `[AshSandbox.Resource | ...]`. The template injected a Spark
+    # extension giving every host a `sandbox do ... end` block declaring
+    # mechanism, run policy and limits. Nothing ever read it back: the only
+    # callers of `AshSandbox.Resource.Info` were `AshSandbox.Plug` and the
+    # extension's own test, and both are withdrawn (R-12). A host now passes
+    # its own extensions or none.
+    extensions = Keyword.get(opts, :extensions, [])
 
     quote do
       use Ash.Resource,
@@ -292,8 +293,16 @@ defmodule AshSandbox.RegistryTemplate do
         attribute :data_store_ref, :string, public?: true
         attribute :data_store_placement, :string, public?: true
 
-        # Drives idle-stop (`003-FR-016`), which `005` implements.
-        attribute :last_request_at, :utc_datetime_usec, public?: true
+        # ⚠️ `last_request_at` stood here, described as driving idle-stop
+        # (`003-FR-016`). Nothing ever wrote it: the `touch` action that set it
+        # had no caller in any host, so the *input* to an idle decision was
+        # always `nil` and `005`'s idle-stop was never implementable against
+        # it. `022`'s spec recorded this and it stayed. The column is removed
+        # rather than left nullable, because a timestamp named
+        # `last_request_at` reads as evidence that requests are being tracked.
+        #
+        # Reviving idle-stop means adding the write path first and this column
+        # with it.
 
         # Set on every transition, so an operation's duration is derivable from
         # the record rather than only from the emitting call site.
@@ -449,12 +458,6 @@ defmodule AshSandbox.RegistryTemplate do
           change set_attribute(:address, nil)
           change atomic_update(:state_changed_at, expr(now()))
         end
-
-        update :touch do
-          description "Records that the sandbox served a request, for idle-stop (003-FR-016)."
-          accept []
-          change set_attribute(:last_request_at, &DateTime.utc_now/0)
-        end
       end
 
       @doc """
@@ -466,7 +469,7 @@ defmodule AshSandbox.RegistryTemplate do
       ## What is deliberately withheld
 
       `environment_ref`, `data_store_ref`, `data_store_placement`, `address`,
-      `state`, `last_request_at`, `state_changed_at`, and the timestamps.
+      `state`, `state_changed_at`, and the timestamps.
 
       Each is registry bookkeeping. A mechanism that needed any of them would be
       reaching into host concepts — and `state` above all, because a mechanism

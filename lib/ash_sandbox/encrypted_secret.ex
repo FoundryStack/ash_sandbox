@@ -113,23 +113,69 @@ defmodule AshSandbox.EncryptedSecret do
     end
   end
 
-  defp key do
-    config = Application.get_env(:ash_sandbox, __MODULE__, [])
+  @doc """
+  Derives the key now, so no later read has to.
 
-    case Keyword.get(config, :key) do
-      nil ->
-        raise """
-        #{inspect(__MODULE__)} requires an encryption key.
+  Called from `AshSandbox.Application.start/2`. A consumer that holds no
+  credentials configures no key, so an unconfigured application is a no-op here
+  rather than a boot failure — the raise belongs on the first *use* of a
+  credential, where it names what the caller was trying to do.
+  """
+  @spec warm() :: :ok
+  def warm do
+    if configured(), do: _key = key()
+    :ok
+  end
 
-            config :ash_sandbox, #{inspect(__MODULE__)},
-              key: System.fetch_env!("SANDBOX_CREDENTIAL_KEY")
+  @doc false
+  # ⚠️ Public for the test that asserts a read does not re-derive
+  # (`encrypted_secret_test.exs`), and for no other caller. It returns the raw
+  # key, which is why it is `@doc false`: `Application.get_env/2` already hands
+  # the same secret to anything running in this VM, so this exposes nothing new,
+  # but it should not read as part of the library's interface either.
+  #
+  # ## Cached in `persistent_term`, keyed by the configured value
+  #
+  # Base64-decoding and length-checking 32 bytes is not expensive, but it ran on
+  # every encrypt *and* every decrypt -- so loading a page of credentials paid
+  # for it once per row, allocating a fresh copy of the key each time. A
+  # `persistent_term` read allocates nothing and copies nothing.
+  #
+  # The cache key includes the configured (encoded) value rather than being a
+  # bare module name. A key that changed in configuration but not in the cache
+  # would encrypt new rows with the old one and give no sign of it, and
+  # `config/test.exs` sets a different key from `dev` -- so this is also what
+  # keeps the cache honest across environments. Comparing the encoded string is
+  # the cheap half; the decode is what is skipped.
+  @spec key() :: binary()
+  def key do
+    encoded = configured() || raise missing_key_message()
 
-        Generate one with: Base.encode64(:crypto.strong_rand_bytes(32))
-        """
+    case :persistent_term.get({__MODULE__, :key, encoded}, :miss) do
+      :miss ->
+        derived = decode_key(encoded)
+        :persistent_term.put({__MODULE__, :key, encoded}, derived)
+        derived
 
-      encoded ->
-        decode_key(encoded)
+      derived ->
+        derived
     end
+  end
+
+  defp configured do
+    Application.get_env(:ash_sandbox, __MODULE__, [])
+    |> Keyword.get(:key)
+  end
+
+  defp missing_key_message do
+    """
+    #{inspect(__MODULE__)} requires an encryption key.
+
+        config :ash_sandbox, #{inspect(__MODULE__)},
+          key: System.fetch_env!("SANDBOX_CREDENTIAL_KEY")
+
+    Generate one with: Base.encode64(:crypto.strong_rand_bytes(32))
+    """
   end
 
   defp decode_key(encoded) do

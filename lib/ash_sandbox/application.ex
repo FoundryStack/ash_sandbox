@@ -8,6 +8,11 @@ defmodule AshSandbox.Application do
 
   @impl true
   def start(_type, _args) do
+    # Derived once here rather than on every encrypt and every decrypt. A
+    # consumer with no credentials has no key configured, and this is a no-op
+    # for it -- see `AshSandbox.EncryptedSecret.warm/0`.
+    :ok = AshSandbox.EncryptedSecret.warm()
+
     children = [
       # Starts a worker by calling: AshSandbox.Worker.start_link(arg)
       # {AshSandbox.Worker, arg}

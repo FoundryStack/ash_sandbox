@@ -11,10 +11,12 @@ defmodule AshSandbox do
 
     * `AshSandbox.RegistryTemplate` — `__using__/1` template; **the host**
       declares data layer, repo, table, and domain
-    * `AshSandbox.RunPolicy` — host-supplied "may this sandbox run?" behaviour
-    * `AshSandbox.Resource` — DSL extension declaring limits, idle timeout, and
-      mechanism
-    * `AshSandbox.Plug` — hostname → sandbox routing
+  ⚠️ Three modules were withdrawn from this list (R-12): `AshSandbox.RunPolicy`,
+  the `AshSandbox.Resource` DSL extension, and `AshSandbox.Plug`. All three were
+  correct, tested, and reachable only from each other -- the plug was the sole
+  reader of the DSL, the DSL was the sole route to the run policy, and no host
+  in the umbrella mounted the plug. Routing is done by Caddy against
+  `Axonn.Routing`, which is why removing them changes no behaviour.
 
   ## Everything else is private
 
@@ -53,18 +55,21 @@ defmodule AshSandbox do
 
   ## Declared limits are not enforced limits
 
-  `AshSandbox.Resource` lets a host *declare* CPU, memory, and disk limits.
-  Nothing inside the BEAM can enforce them — `005` established that the boundary
-  is the operating system. `ExSandbox.Hardening` enforces; this DSL only
-  declares. Where the host cannot enforce, `ExSandbox.Capability` reports the
-  capability unavailable and the mechanism refuses to start sandboxes rather
-  than starting them unconfined.
+  Limits recorded on a registry record are what the host **asked for**. Nothing
+  inside the BEAM can enforce them — `005` established that the boundary is the
+  operating system. `ExSandbox.Hardening` enforces. Where the host cannot
+  enforce, `ExSandbox.Capability` reports the capability unavailable and the
+  mechanism refuses to start sandboxes rather than starting them unconfined.
+
+  ⚠️ The `sandbox do ... end` DSL that used to carry these declarations is
+  withdrawn with the modules above. The sentence it existed to qualify is not:
+  a limit written anywhere in this library is a request, not a cap.
 
   ## Policy belongs to the host
 
   This library has no lifecycle concept and never asks *why* a sandbox may not
-  run. `AshSandbox.RunPolicy` is the seam: the host answers, and the reason is
-  recorded verbatim (`FR-008`). Axonn implements it against tenant `active`
-  state; another host may always return `:ok`.
+  run. ⚠️ It also no longer offers a seam for the host to answer: `FR-008`'s
+  `AshSandbox.RunPolicy` was consulted only by the withdrawn plug, so Axonn's
+  tenant-`active` check runs on its own routing path instead.
   """
 end

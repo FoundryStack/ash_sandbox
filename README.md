@@ -41,9 +41,10 @@ end
 
 * `AshSandbox.RegistryTemplate` — `__using__/1` template; **the host** declares data layer, repo,
   table, and domain
-* `AshSandbox.RunPolicy` — host-supplied "may this sandbox run?" behaviour
-* `AshSandbox.Resource` — DSL extension declaring limits, idle timeout, and mechanism
-* `AshSandbox.Plug` — hostname → sandbox routing
+
+⚠️ `AshSandbox.RunPolicy`, the `AshSandbox.Resource` DSL extension and
+`AshSandbox.Plug` were withdrawn (R-12). They were reachable only from each
+other and no host mounted the plug; routing is Caddy's, against `Axonn.Routing`.
 
 **A module not listed above is private, whether or not it is namespaced `Internal`**
 (`012-FR-014`). `AshSandbox.Internal.*` makes the common case obvious; the list is what defines

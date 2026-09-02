@@ -16,8 +16,6 @@ defmodule AshSandbox.HostApp.Sandboxes do
 
   resources do
     resource AshSandbox.HostApp.SandboxRegistry
-    resource AshSandbox.HostApp.BareRegistry
-    resource AshSandbox.HostApp.RefusingRegistry
     resource AshSandbox.HostApp.Project
     resource AshSandbox.HostApp.Environment
   end
@@ -57,106 +55,13 @@ defmodule AshSandbox.HostApp.SandboxRegistry do
     data_layer: Ash.DataLayer.Ets,
     domain: AshSandbox.HostApp.Sandboxes,
     table: "host_sandboxes"
-
-  sandbox do
-    mechanism(AshSandbox.HostApp.NullMechanism)
-    run_policy(AshSandbox.HostApp.AlwaysAllow)
-    cpu_limit(500)
-    memory_limit_mb(256)
-    disk_quota_mb(1024)
-    idle_timeout_seconds(900)
-  end
 end
 
-defmodule AshSandbox.HostApp.AlwaysAllow do
-  @moduledoc "A host that has no lifecycle opinion -- the simplest legal policy."
-  @behaviour AshSandbox.RunPolicy
-
-  @impl true
-  def may_run?(_sandbox), do: :ok
-end
-
-defmodule AshSandbox.HostApp.RefuseAll do
-  @moduledoc "A host that always refuses, with a reason only it understands."
-  @behaviour AshSandbox.RunPolicy
-
-  @impl true
-  def may_run?(_sandbox), do: {:error, {:owner_delinquent, "invoice 42 unpaid"}}
-end
-
-defmodule AshSandbox.HostApp.NullMechanism do
-  @moduledoc "A mechanism that does nothing, so the DSL has something valid to name."
-  @behaviour ExSandbox.Mechanism
-
-  @impl true
-  def required_capabilities, do: []
-
-  @impl true
-  def provision(sandbox), do: {:ok, sandbox}
-
-  @impl true
-  def start(sandbox), do: {:ok, sandbox}
-
-  @impl true
-  def stop(sandbox), do: {:ok, sandbox}
-
-  @impl true
-  def destroy(_sandbox), do: :ok
-
-  @impl true
-  def status(_sandbox), do: {:ok, :running}
-
-  @impl true
-  def list_running, do: {:ok, []}
-
-  @impl true
-  def usage(_sandbox), do: {:ok, %{}}
-
-  # This fixture isolates nothing and runs nothing. `:could_not_run` is the
-  # honest answer and the one the suite must not score as a pass: an attempt
-  # that never happened has demonstrated neither a limit holding nor a limit
-  # failing.
-  @impl true
-  def execute(_sandbox, {_cmd, _args}, _opts \\ []) do
-    {:error, {:could_not_run, :not_supported}}
-  end
-end
-
-defmodule AshSandbox.HostApp.RefusingRegistry do
-  @moduledoc """
-  A registry whose host has decided its sandboxes may not run (012 T042).
-
-  Same shape as `SandboxRegistry`, different run policy -- the plug must refuse
-  a hostname that resolves perfectly well but whose owner the host has said no
-  about.
-  """
-  use AshSandbox.RegistryTemplate,
-    data_layer: Ash.DataLayer.Ets,
-    domain: AshSandbox.HostApp.Sandboxes,
-    table: "refusing_sandboxes"
-
-  sandbox do
-    mechanism(AshSandbox.HostApp.NullMechanism)
-    run_policy(AshSandbox.HostApp.RefuseAll)
-  end
-end
-
-defmodule AshSandbox.HostApp.BareRegistry do
-  @moduledoc "A host that declares no sandbox options at all -- the minimum call site."
-  use AshSandbox.RegistryTemplate,
-    data_layer: Ash.DataLayer.Ets,
-    domain: AshSandbox.HostApp.Sandboxes,
-    table: "bare_sandboxes"
-end
-
-defmodule AshSandbox.HostApp.ExplodingRegistry do
-  @moduledoc """
-  A registry whose read always raises (012 T042).
-
-  Stands in for the database blip in `006` R4's last row. The plug must refuse
-  on it -- authorizing on a lookup failure would let an attacker who can induce
-  failures reach arbitrary sandboxes.
-  """
-  def to_sandbox(record, context \\ nil),
-    do: AshSandbox.HostApp.SandboxRegistry.to_sandbox(record, context)
-end
+# ⚠️ Six fixtures stood below here: `AlwaysAllow`, `RefuseAll`, `NullMechanism`,
+# `RefusingRegistry`, `BareRegistry` and `ExplodingRegistry`. Each existed to
+# give the withdrawn `sandbox do ... end` DSL something valid to name, or to
+# give `AshSandbox.Plug` a registry that refused, declared nothing, or raised.
+# With both withdrawn (R-12) none of them is reachable from a test.
+#
+# `SandboxRegistry` above is now the whole integration surface a host writes,
+# which is what `012` T016 claimed it was.

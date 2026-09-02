@@ -31,12 +31,12 @@ defmodule AshSandbox.MixProject do
   defp deps do
     [
       {:ash, "~> 3.0"},
-      # Declared, not borrowed. `plug` is present in the umbrella already, so
-      # `AshSandbox.Plug` would compile without this line -- and would then fail
-      # at runtime inside a consumer's application that does not happen to have
-      # it. That is research R2's failure mode exactly: the violation is
-      # invisible here and expensive there.
-      {:plug, "~> 1.16"},
+      # ⚠️ `{:plug, "~> 1.16"}` was removed here with `AshSandbox.Plug` (R-12).
+      # It was declared rather than borrowed for exactly the right reason --
+      # the umbrella supplies `plug`, so the module compiled either way and
+      # would have failed inside a consumer that had no `plug` of its own. With
+      # the only module that used it gone, the declaration is the same kind of
+      # invisible-here claim in the other direction.
       # Same rule as `plug` above, and the same failure mode. The templates
       # emit `Ash.Policy.Authorizer` policies (003 T050), and Ash needs a SAT
       # solver to evaluate them. The umbrella already has one via `axonn`, so
@@ -44,21 +44,14 @@ defmodule AshSandbox.MixProject do
       # `Picosat.solve/1 is undefined` inside a consumer that has no solver of
       # its own, on their first authorized read.
       {:picosat_elixir, "~> 0.2"},
-      # ⚠️ `~> 1.0.1`, not `~> 1.0`, and the patch floor is load-bearing.
-      # 1.0.0 shipped `boundary.md` where `Application.app_dir/2` cannot reach
-      # it and `ExSandbox.LoopFormatter` in `test/`, which `package/0` does not
-      # publish. `library_boundary_test.exs` reads the first and two Mix tasks
-      # here name the second, so this umbrella does not work against 1.0.0.
-      # ⚠️ **TEMPORARY, and task 4.6 is what removes it.** 1.2.0 adds the
-      # `address/1` callback and the loopback port publish that groups 5, 8 and
-      # 9 are built on, and it is not on Hex yet -- publishing needs the
-      # maintainer's two-factor code. The operator chose to unblock the work
-      # against the local checkout and publish afterwards.
-      #
-      # The path is absolute on purpose: a relative one would be correct in
-      # exactly one checkout, and this repository is worked in git worktrees.
-      # Restore `{:ex_sandbox, "~> 1.2"}` the moment 1.2.0 is published.
-      {:ex_sandbox, path: "/Users/maxsvargal/Documents/Projects/ex_sandbox", override: true}
+      # ⚠️ `~> 1.2`, and the minor floor is load-bearing. 1.2.0 adds the
+      # `address/1` callback and the loopback port publish that groups 5, 8
+      # and 9 are built on; 1.0.0 additionally shipped `boundary.md` where
+      # `Application.app_dir/2` cannot reach it and `ExSandbox.LoopFormatter`
+      # in `test/`, which `package/0` does not publish --
+      # `library_boundary_test.exs` reads the first and two Mix tasks here
+      # name the second.
+      {:ex_sandbox, "~> 1.2"}
     ]
   end
 

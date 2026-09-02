@@ -31,14 +31,18 @@ defmodule AshSandbox.DependencyAndGateTest do
   # stay green while this app grew a web framework; one asserting a maximum
   # count would let the next dependency in as an old one left. Changing this
   # list is where the argument for a new dependency belongs.
-  @allowed ~w(ash ex_sandbox picosat_elixir plug)
+  # ⚠️ `plug` left this list with `AshSandbox.Plug` (R-12). Removing a name is
+  # the same act as adding one and belongs here for the same reason: the
+  # umbrella still supplies `plug`, so nothing would have failed had the
+  # declaration been left behind.
+  @allowed ~w(ash ex_sandbox picosat_elixir)
 
   # The two that make this app a library rather than part of the host. Anything
   # reaching these is reaching upward.
   @forbidden ~w(axonn axonn_web)
 
   describe "the dependency declaration" do
-    test "is exactly Ash, ex_sandbox and their two runtime requirements" do
+    test "is exactly Ash, ex_sandbox and its one runtime requirement" do
       assert declared_deps() == Enum.sort(@allowed), """
       ash_sandbox's consumer-facing dependencies changed.
       Expected #{inspect(Enum.sort(@allowed))}, got #{inspect(declared_deps())}.
