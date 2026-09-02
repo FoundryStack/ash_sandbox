@@ -44,13 +44,17 @@ defmodule AshSandbox.MixProject do
       # `Picosat.solve/1 is undefined` inside a consumer that has no solver of
       # its own, on their first authorized read.
       {:picosat_elixir, "~> 0.2"},
-      # ⚠️ `~> 1.2`, and the minor floor is load-bearing. 1.2.0 adds the
-      # `address/1` callback and the loopback port publish that groups 5, 8
-      # and 9 are built on; 1.0.0 additionally shipped `boundary.md` where
+      # ⚠️ `~> 1.2`, not `~> 1.0.1`, and the minor floor is load-bearing. 1.2.0
+      # adds the `address/1` callback and the loopback port publish that groups
+      # 5, 8 and 9 are built on; 1.0.0 additionally shipped `boundary.md` where
       # `Application.app_dir/2` cannot reach it and `ExSandbox.LoopFormatter`
       # in `test/`, which `package/0` does not publish --
-      # `library_boundary_test.exs` reads the first and two Mix tasks here
-      # name the second.
+      # `library_boundary_test.exs` reads the first and two Mix tasks here name
+      # the second. It was briefly an absolute path dependency while 1.2.0
+      # waited on the maintainer's two-factor code; it published 2026-08-31 and
+      # the path is gone, which is what `DependencyAndGateTest` refuses to let
+      # regress -- a path resolves on the machine that wrote it and nowhere
+      # else, and this repository is worked in git worktrees.
       {:ex_sandbox, "~> 1.2"}
     ]
   end
