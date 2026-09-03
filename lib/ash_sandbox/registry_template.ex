@@ -531,6 +531,22 @@ defmodule AshSandbox.RegistryTemplate do
           the old one came back.
           """
 
+          # ⚠️ `require_atomic? false`, and the reason is the `pre_check_with`
+          # note on `identity :unique_environment` above read in the other
+          # direction. On a data layer that cannot enforce an identity itself
+          # -- ETS, which is what a host without PostgreSQL gets -- Ash adds an
+          # `eager_validate_identities` hook to the `before_action` phase of
+          # EVERY action on this resource, and any `before_action` hook makes
+          # an update non-atomic. MEASURED: without this line the action raises
+          # `MustBeAtomic` on ETS while passing on PostgreSQL, so a template
+          # that exists to work on both data layers would have worked on one.
+          #
+          # Nothing is given up by it. `last_request_at` is last-observation-
+          # wins by construction -- two scrapes racing on one sandbox is two
+          # writes of nearly the same instant -- so there is no read-modify-
+          # write here for atomicity to protect.
+          require_atomic? false
+
           accept []
           argument :observed_at, :utc_datetime_usec, allow_nil?: false
 
