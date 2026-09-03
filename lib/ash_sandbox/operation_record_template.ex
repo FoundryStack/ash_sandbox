@@ -146,6 +146,18 @@ defmodule AshSandbox.OperationRecordTemplate do
         defaults([:read])
 
         create :record do
+          description("""
+          Records the outcome of one lifecycle action. The whole attribution
+          chain is accepted as stored values rather than reached by traversal,
+          so a failed provision stays attributable after its saga has rolled the
+          environment row back — and `sandbox_ref` may be absent, because a
+          provision that died before the sandbox existed still produced an
+          operation worth recording. A failure must carry a cause from the
+          closed set. `occurred_at` is stamped only when the caller supplies
+          none: the caller knows when the operation happened, this changeset
+          only knows when it was written down.
+          """)
+
           accept([
             :owner_ref,
             :project_ref,

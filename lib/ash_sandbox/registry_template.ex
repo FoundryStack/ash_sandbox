@@ -343,6 +343,15 @@ defmodule AshSandbox.RegistryTemplate do
         defaults [:read, :destroy]
 
         create :provision do
+          description """
+          Opens the registry row for a sandbox, in `provisioning`, before the
+          thing it records exists — so a crash mid-saga leaves something
+          reconciliation can find. A concurrent second provision for the same
+          environment gets the winner's row back untouched rather than raising:
+          the database arbitrates on the environment identity, because a
+          check-then-act races even inside a transaction.
+          """
+
           accept [
             :id,
             :owner_ref,
@@ -385,6 +394,12 @@ defmodule AshSandbox.RegistryTemplate do
         end
 
         update :mark_provisioned do
+          description """
+          Records that provisioning finished, together with the facts that were
+          not knowable when the row was opened: the mechanism's own reference,
+          the address, and where the sandbox's data store actually landed.
+          """
+
           # `data_store_ref` and `data_store_placement` are accepted here, not
           # only at `:provision`, because they are not known when the row is
           # created: the row is created *first* so that a crash mid-saga leaves
@@ -402,6 +417,12 @@ defmodule AshSandbox.RegistryTemplate do
         # reporting a fault, and it cannot make that choice if "start in
         # progress" and "not running" are the same value.
         update :mark_starting do
+          description """
+          Records that a start is under way. A distinct state rather than a
+          flag, so a caller choosing between starting a sandbox on demand and
+          reporting a fault can tell "start in progress" from "not running".
+          """
+
           accept []
           change set_attribute(:state, :starting)
           change atomic_update(:state_changed_at, expr(now()))
@@ -412,6 +433,13 @@ defmodule AshSandbox.RegistryTemplate do
         # null address is a sandbox nothing can reach while everything reports
         # it healthy.
         update :mark_running do
+          description """
+          Records that the sandbox is running and reachable, and clears the
+          failure a previous attempt left behind. An address is required rather
+          than merely accepted: a running row with no address is a sandbox
+          nothing can reach while everything reports it healthy.
+          """
+
           accept [:mechanism_ref, :address]
 
           validate present(:address) do
@@ -425,6 +453,11 @@ defmodule AshSandbox.RegistryTemplate do
         end
 
         update :mark_stopping do
+          description """
+          Records that a stop is under way, so an in-flight stop is
+          distinguishable from a sandbox that has already stopped.
+          """
+
           accept []
           change set_attribute(:state, :stopping)
           change atomic_update(:state_changed_at, expr(now()))
@@ -434,6 +467,12 @@ defmodule AshSandbox.RegistryTemplate do
         # one (contracts/mechanism.md), so keeping the old value would leave a
         # stale address that looks current.
         update :mark_stopped do
+          description """
+          Records that the sandbox has stopped, and clears its address. A start
+          may return a different one, so keeping the old value would leave a
+          stale address that reads as current.
+          """
+
           accept []
           change set_attribute(:state, :stopped)
           change set_attribute(:address, nil)
@@ -441,6 +480,13 @@ defmodule AshSandbox.RegistryTemplate do
         end
 
         update :mark_failed do
+          description """
+          Records that the sandbox failed, with a cause from the closed set and
+          optional free-text detail beside it. The set is closed so a caller
+          cannot invent a reason and collapse the distinguishable causes into
+          one generic error.
+          """
+
           # An atom from the closed set, so a caller cannot invent a reason.
           argument :reason, :atom, allow_nil?: false
           argument :detail, :string
@@ -453,6 +499,12 @@ defmodule AshSandbox.RegistryTemplate do
         end
 
         update :mark_destroyed do
+          description """
+          Records that the sandbox is gone and clears its address. The row is
+          retained rather than deleted, so what existed stays answerable after
+          the thing it recorded does not.
+          """
+
           accept []
           change set_attribute(:state, :destroyed)
           change set_attribute(:address, nil)

@@ -100,10 +100,24 @@ defmodule AshSandbox.TemplateTemplate do
         defaults([:read, :destroy])
 
         create :register do
+          description("""
+          Declares that a pre-built template exists, so provisioning can fail
+          naming a missing one rather than starting an empty environment. It
+          builds nothing — the image is produced by the stack's adapter — and
+          the read policy is the only one that admits an ordinary actor, so
+          registering goes through `authorize?: false`.
+          """)
+
           accept([:name, :version, :target_stack, :runtime_version, :available])
         end
 
         update :withdraw do
+          description("""
+          Marks a template unavailable without deleting it. The row has to
+          survive so that an environment still naming this template fails
+          naming it; a deleted row could not say what was withdrawn.
+          """)
+
           accept([])
           change(set_attribute(:available, false))
         end

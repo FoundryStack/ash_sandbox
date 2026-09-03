@@ -88,10 +88,24 @@ defmodule AshSandbox.ProjectTemplate do
         defaults([:read, :destroy])
 
         create :create do
+          description("""
+          Opens a project under one owner. `owner_ref` is accepted as an opaque
+          value the library never parses or joins against, and the name is
+          unique within that owner rather than globally, so one owner's choice
+          of name cannot deny it to another.
+          """)
+
           accept([:owner_ref, :name])
         end
 
         update :rename do
+          description("""
+          Changes a project's name and nothing else. `owner_ref` is deliberately
+          not accepted here: a project cannot be moved between owners by an
+          update, because that would carry its environments across the only
+          boundary separating them.
+          """)
+
           accept([:name])
         end
       end

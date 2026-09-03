@@ -141,6 +141,13 @@ defmodule AshSandbox.SandboxCredentialTemplate do
         defaults([:read, :destroy])
 
         create :issue do
+          description("""
+          Issues the credential a sandbox uses to reach its data store. The
+          secret is an encrypted, `sensitive?` value, which is what keeps it out
+          of inspect output and error messages; rotation replaces it in place
+          rather than issuing a second row.
+          """)
+
           accept([:sandbox_id, :role_name, :secret, :data_store_ref])
         end
 

@@ -191,6 +191,14 @@ defmodule AshSandbox.EnvironmentTemplate do
         defaults([:read, :destroy])
 
         create :create do
+          description("""
+          Opens an environment inside a project. `network_allowlist` is accepted
+          here, which is what makes egress configurable at all — it was public
+          and writable but accepted by no action, so the only way to set it was
+          to build the environment map by hand, and a control that cannot be
+          configured is not a control.
+          """)
+
           # ⚠️ `:network_allowlist` was declared above, made public and made
           # writable, and then accepted by no action -- so the only way to set
           # it was to build the environment map by hand, which is what every
@@ -225,6 +233,16 @@ defmodule AshSandbox.EnvironmentTemplate do
         # enforcement tasks need a Linux network namespace and have never run.
         # `AshSandbox.Internal.RefuseAllowlistChangeWhileLive` carries the rest.
         update :update do
+          description("""
+          Changes an environment's availability mode, idle timeout, template and
+          network allowlist. A change to the allowlist is refused while a
+          sandbox for this environment is live: a running sandbox is policed by
+          rules its mechanism installed at launch and nothing re-reads them, so
+          accepting the change unguarded would persist a narrowed allowlist
+          beside a sandbox still running the wider rules — success reported, and
+          nothing changed.
+          """)
+
           # ⚠️ Needed, and only for the validation below. Deciding whether this
           # environment has a live sandbox is a read of another resource, which
           # no expression over this row can express -- so the validation has no
