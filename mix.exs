@@ -28,7 +28,7 @@ defmodule AshSandbox.MixProject do
       # `apps/axonn/mix.exs` and
       # `openspec/changes/enforce-the-domain-graph/scr/001-boundary-cannot-express-the-measured-graph.md`
       # for the two findings that keep it out of the other two.
-      compilers: [:boundary] ++ Mix.compilers()
+      compilers: compilers(Mix.env())
     ]
   end
 
@@ -43,6 +43,12 @@ defmodule AshSandbox.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   # Ash and `ex_sandbox`, and nothing referencing Axonn (FR-002, FR-006, T005).
+  # `:boundary` only where it is declared -- see the dependency's own note. In
+  # `:prod` this is the plain default list, so a consumer that never resolves
+  # `:boundary` can still compile this app.
+  defp compilers(env) when env in [:dev, :test], do: [:boundary] ++ Mix.compilers()
+  defp compilers(_env), do: Mix.compilers()
+
   defp deps do
     [
       {:ash, "~> 3.0"},
@@ -83,7 +89,21 @@ defmodule AshSandbox.MixProject do
       # blocked by neither of SCR-001's two findings -- it has no `Ash.Domain`
       # module and no cycle -- which is why the compiler runs here and nowhere
       # else.
-      {:boundary, "~> 0.10", runtime: false}
+      # ⚠️ `only: [:dev, :test]`, and that is the difference between checking
+      # this app and taxing everyone who uses it. A `compilers:` entry is not a
+      # private choice: a consumer resolving `ash_sandbox` from Hex compiles it
+      # with this project file, so an unscoped `:boundary` would make an
+      # internal architecture check a hard build requirement of every
+      # application that depends on this one. `DependencyAndGateTest` is what
+      # noticed -- its `declared_deps/0` drops anything whose `only:` excludes
+      # `:prod` precisely because that is not consumer facing.
+      #
+      # The check loses nothing by it. `mix precommit` and `mix prepush` both
+      # run in `:test` and development builds are `:dev`, so every build that
+      # could introduce an upward reference still runs the compiler. Only a
+      # `:prod` build skips it, and a `:prod` build is not where the reference
+      # gets written.
+      {:boundary, "~> 0.10", runtime: false, only: [:dev, :test]}
     ]
   end
 
