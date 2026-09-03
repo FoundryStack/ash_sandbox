@@ -72,4 +72,46 @@ defmodule AshSandbox do
   `AshSandbox.RunPolicy` was consulted only by the withdrawn plug, so Axonn's
   tenant-`active` check runs on its own routing path instead.
   """
+
+  # `enforce-the-domain-graph`, as amended by SCR-001. This is the one place in
+  # the umbrella where the `boundary` compiler is turned on, and the reason it
+  # is safe here is the reason it is unsafe elsewhere: there is no `Ash.Domain`
+  # module in this app to collide with `use Boundary` over the `@opts` module
+  # attribute, and one boundary cannot form a cycle.
+  #
+  # `deps: []` with `check: [apps: [...]]` naming `:axonn` is the whole check.
+  # `FR-002` and `FR-006` say nothing here may reference the host application,
+  # and until now nothing enforced that: the umbrella builds every app into one
+  # `_build/<env>/lib`, so `Axonn.Tenancy` is loadable from here and a
+  # reference to it raises no undefined-module warning. It is now a build
+  # failure. ⚠️ `:axonn` is deliberately NOT in `deps/0` -- listing it there to
+  # make the check work would create the very dependency the check forbids.
+  # `check.apps` is boundary's mechanism for policing an application you do not
+  # depend on, which is exactly the shape of this rule.
+  #
+  # ⚠️ `aliases: true` is load-bearing, not decoration. MEASURED 2026-09-03: the
+  # first version of this declaration omitted it, and a probe module holding
+  # `@teeth_probe Axonn.Tenancy` compiled clean -- the check had no teeth
+  # against the most likely way the rule gets broken, an `alias Axonn.Something`
+  # at the top of a file. `Boundary.Checker` filters every reference through
+  # `from_boundary.check.aliases or reference.type != :alias_reference`
+  # (`deps/boundary/lib/boundary/checker.ex:166`) and `normalize_check` defaults
+  # `aliases` to `false` (`deps/boundary/lib/boundary/definition.ex`). With it
+  # set, the same probe fails the build: `forbidden reference to Axonn.Tenancy`.
+  #
+  # `exports:` is the published surface `@moduledoc` above lists, and it
+  # excludes `AshSandbox.Internal.*` by naming what is public rather than by
+  # denying what is not.
+  use Boundary,
+    deps: [],
+    check: [aliases: true, apps: [axonn: :compile, axonn: :runtime]],
+    exports: [
+      EncryptedSecret,
+      EnvironmentTemplate,
+      OperationRecordTemplate,
+      ProjectTemplate,
+      RegistryTemplate,
+      SandboxCredentialTemplate,
+      TemplateTemplate
+    ]
 end

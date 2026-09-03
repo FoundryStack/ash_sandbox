@@ -13,7 +13,22 @@ defmodule AshSandbox.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      # ⚠️ BEFORE `Mix.compilers()`, which reads backwards and is not a typo.
+      # `:boundary` is not a pass over already-compiled output: its `run/1`
+      # opens the ETS tables and installs the compiler tracer that `:elixir`
+      # then writes every cross-module reference into, and its `after_compiler`
+      # callback is what reports. MEASURED: appended after `Mix.compilers()`
+      # instead, the first file `:elixir` compiled raised `the table identifier
+      # does not refer to an existing ETS table` from
+      # `Boundary.Mix.CompilerState.initialize_module/1` -- the tracer fires
+      # before the table it writes to exists.
+      #
+      # This is the ONLY app in the umbrella with `:boundary` here. See
+      # `apps/axonn/mix.exs` and
+      # `openspec/changes/enforce-the-domain-graph/scr/001-boundary-cannot-express-the-measured-graph.md`
+      # for the two findings that keep it out of the other two.
+      compilers: [:boundary] ++ Mix.compilers()
     ]
   end
 
@@ -55,7 +70,20 @@ defmodule AshSandbox.MixProject do
       # the path is gone, which is what `DependencyAndGateTest` refuses to let
       # regress -- a path resolves on the machine that wrote it and nowhere
       # else, and this repository is worked in git worktrees.
-      {:ex_sandbox, "~> 1.2"}
+      {:ex_sandbox, "~> 1.2"},
+      # `enforce-the-domain-graph` names three apps for this dependency and one
+      # of them, `apps/sandbox_gateway`, no longer exists -- the umbrella root's
+      # `releases/0` note records that its live half moved under
+      # `Axonn.Routing`. This app is the third one there is, and it is the one
+      # that most wants the check: FR-002 and FR-006 say nothing here may
+      # reference Axonn, and until now that direction was enforced by review.
+      # `AshSandbox`'s boundary declares `deps: []` and `check: [apps: [axonn:
+      # ...]]`, so a reference to any `Axonn.*` module from this app fails the
+      # build rather than a reader. This app is the one place the check is
+      # blocked by neither of SCR-001's two findings -- it has no `Ash.Domain`
+      # module and no cycle -- which is why the compiler runs here and nowhere
+      # else.
+      {:boundary, "~> 0.10", runtime: false}
     ]
   end
 
