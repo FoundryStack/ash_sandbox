@@ -60,6 +60,36 @@ defmodule AshSandbox.EnvironmentTemplate do
   unique identity itself (ETS, Mnesia), which made this template AshPostgres-only
   in practice and contradicted `012-FR-009`. `ash_sandbox`'s own ETS `HostApp`
   fixtures now bind a `Project` and `Environment`, not only a registry.
+
+  ## `purpose` is here; the rule that reads it is not
+
+  An environment having a purpose — development, staging, production — is a
+  general fact about environments, so it is an attribute of this template. What
+  a purpose *implies* about availability is not general: it depends on the
+  host's commercial arrangement with the owner, and a library that knows what
+  `:free` and `:paid` mean has stopped being a library
+  (`derive-availability-from-plan-and-purpose` design D2).
+
+  ⚠️ **`purpose` is never derived from `name`.** The name is free text; a rule
+  that read it would classify `production-old` and `staging-2` wrongly,
+  silently, and only for the hosts that happen to have named things that way.
+
+  ## `availability_derivation:` is how a host takes the choice away
+
+  Pass a change module and three things happen: `:availability_mode` leaves the
+  accept lists of `create` and `update`, the module runs on both, and an
+  `update :rederive_availability` appears that runs it and nothing else.
+
+  Omit it — as this library's own ETS `HostApp` fixtures do — and the template
+  behaves exactly as it did: `availability_mode` stays caller input. The
+  library keeps the field writable at the DSL level; it is the *binding* that
+  removes the choice.
+
+  ⚠️ The module must write `availability_mode` **and** `idle_timeout_seconds`
+  together, because the validations below reject a mode/timeout pair that
+  disagrees. It must also write them while the changeset is being built rather
+  than in a `before_action` hook, since those validations run after the
+  action's changes and before any hook.
   """
 
   @doc false
@@ -70,6 +100,13 @@ defmodule AshSandbox.EnvironmentTemplate do
     repo = Keyword.get(opts, :repo)
     project_resource = Keyword.fetch!(opts, :project_resource)
     registry_resource = Keyword.fetch!(opts, :registry_resource)
+    availability_derivation = Keyword.get(opts, :availability_derivation)
+
+    # ⚠️ Computed here, in the macro, rather than branched on inside the
+    # generated `accept` list: `accept` takes a literal list, and a host that
+    # derives availability must not merely be *discouraged* from passing the
+    # mode — the key has to be absent, so a supplied value is dropped.
+    mode_accepted? = is_nil(availability_derivation)
 
     quote do
       use Ash.Resource,
@@ -114,6 +151,20 @@ defmodule AshSandbox.EnvironmentTemplate do
           default(:on_demand)
           public?(true)
           constraints(one_of: [:on_demand, :always_running])
+        end
+
+        # What this environment is *for*, as declared rather than as guessed.
+        #
+        # ⚠️ **Not read off `name`**, and the default is the safe half of that
+        # decision: an environment whose purpose nobody stated is a development
+        # environment, because a host deriving availability from this
+        # (`availability_derivation:`) is then wrong in the direction that
+        # costs a cold start rather than in the direction that keeps paying.
+        attribute :purpose, :atom do
+          allow_nil?(false)
+          default(:development)
+          public?(true)
+          constraints(one_of: [:development, :staging, :production])
         end
 
         attribute :target_stack, :atom do
@@ -205,15 +256,33 @@ defmodule AshSandbox.EnvironmentTemplate do
           # test did and no operator can. `029-FR-011` names that shape
           # exactly: *a control that cannot be configured is not a control*.
           # Every map-built provision test passed over the gap.
-          accept([
-            :project_id,
-            :name,
-            :availability_mode,
-            :target_stack,
-            :template_name,
-            :idle_timeout_seconds,
-            :network_allowlist
-          ])
+          accept(
+            [
+              :project_id,
+              :name,
+              :target_stack,
+              :template_name,
+              :idle_timeout_seconds,
+              :network_allowlist
+            ] ++ unquote(if mode_accepted?, do: [:availability_mode], else: [])
+          )
+
+          # ⚠️ An argument rather than an accepted attribute, so that "no
+          # purpose was stated" is distinguishable from "development was
+          # stated". `update` needs that distinction — see there — and one
+          # shape across both actions is cheaper than two.
+          argument :purpose, :atom do
+            allow_nil?(true)
+            constraints(one_of: [:development, :staging, :production])
+          end
+
+          change({AshSandbox.Internal.SetPurposeFromArgument, []})
+
+          unquote(
+            if availability_derivation do
+              quote do: change({unquote(availability_derivation), []})
+            end
+          )
         end
 
         # ⚠️ **`:network_allowlist` is accepted here, and refused while a
@@ -257,18 +326,64 @@ defmodule AshSandbox.EnvironmentTemplate do
           # `029`'s enforcement work rather than this write path's.
           require_atomic?(false)
 
-          accept([
-            :availability_mode,
-            :idle_timeout_seconds,
-            :template_name,
-            :network_allowlist
-          ])
+          accept(
+            [
+              :idle_timeout_seconds,
+              :template_name,
+              :network_allowlist
+            ] ++ unquote(if mode_accepted?, do: [:availability_mode], else: [])
+          )
+
+          # ⚠️ Nullable, and it has to be: an update that says nothing about
+          # purpose must leave the purpose alone, and an accepted attribute
+          # cannot express "said nothing" without also making `nil` a value
+          # somebody could store.
+          argument :purpose, :atom do
+            allow_nil?(true)
+            constraints(one_of: [:development, :staging, :production])
+          end
+
+          change({AshSandbox.Internal.SetPurposeFromArgument, []})
+
+          unquote(
+            if availability_derivation do
+              quote do: change({unquote(availability_derivation), []})
+            end
+          )
 
           validate(
             {AshSandbox.Internal.RefuseAllowlistChangeWhileLive,
              registry_resource: unquote(registry_resource)}
           )
         end
+
+        unquote(
+          if availability_derivation do
+            quote do
+              # `derive-availability-from-plan-and-purpose` 3.2. Recomputes one
+              # environment's availability from its current purpose and its
+              # owner's current standing, and does nothing else.
+              #
+              # ⚠️ It accepts nothing on purpose. Idempotence is what makes it
+              # safe for the backfill to call over every row and for
+              # `set_plan`'s fan-out to call over an account's, and an accept
+              # list is exactly how that property would be lost.
+              update :rederive_availability do
+                description("""
+                Recomputes this environment's availability mode from its purpose
+                and its owner's plan, writing the idle timeout that mode
+                requires. Accepts nothing and is idempotent: run twice, the
+                second run writes what the first one did.
+                """)
+
+                accept([])
+                require_atomic?(false)
+
+                change({unquote(availability_derivation), []})
+              end
+            end
+          end
+        )
       end
     end
   end
