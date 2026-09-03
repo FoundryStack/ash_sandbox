@@ -228,4 +228,95 @@ defmodule AshSandbox.RegistryTemplateTest do
                )
     end
   end
+
+  describe "record_request (restore-idle-stop 2.2)" do
+    # Spec scenario, routing: "The observation time is the interval's, not the
+    # writer's".
+    #
+    # ⚠️ THE test for this action's whole reason to exist. The obvious way to
+    # write `record_request` is `change set_attribute(:last_request_at,
+    # &DateTime.utc_now/0)`, which compiles, passes any test that only asserts
+    # "a timestamp appeared", and is wrong: the scrape observes an interval that
+    # has already closed, so the moment of the write is not the moment of the
+    # request. Asserting a value the test SUPPLIED is the only assertion that
+    # can tell the two implementations apart.
+    test "writes the argument, not the moment of the write" do
+      observed_at = ~U[2024-03-04 05:06:07.891234Z]
+
+      {:ok, sandbox} =
+        Ash.create(
+          SandboxRegistry,
+          %{id: "rr-1", owner_ref: "o", environment_ref: "env-rr-1"},
+          action: :provision,
+          authorize?: false
+        )
+
+      assert is_nil(sandbox.last_request_at)
+
+      {:ok, recorded} =
+        Ash.update(sandbox, %{observed_at: observed_at},
+          action: :record_request,
+          authorize?: false
+        )
+
+      assert recorded.last_request_at == observed_at
+    end
+
+    test "a later observation moves it, and the value is still the caller's" do
+      {:ok, sandbox} =
+        Ash.create(
+          SandboxRegistry,
+          %{id: "rr-2", owner_ref: "o", environment_ref: "env-rr-2"},
+          action: :provision,
+          authorize?: false
+        )
+
+      {:ok, first} =
+        Ash.update(sandbox, %{observed_at: ~U[2024-03-04 05:00:00.000000Z]},
+          action: :record_request,
+          authorize?: false
+        )
+
+      {:ok, second} =
+        Ash.update(first, %{observed_at: ~U[2024-03-04 05:05:00.000000Z]},
+          action: :record_request,
+          authorize?: false
+        )
+
+      assert second.last_request_at == ~U[2024-03-04 05:05:00.000000Z]
+    end
+
+    test "the observation time is required" do
+      # An optional argument would default the attribute to nil, and a nil
+      # `last_request_at` is the value the sweep reads as "never observed" --
+      # so a caller that forgot the time would erase the evidence of use it was
+      # called to record.
+      {:ok, sandbox} =
+        Ash.create(
+          SandboxRegistry,
+          %{id: "rr-3", owner_ref: "o", environment_ref: "env-rr-3"},
+          action: :provision,
+          authorize?: false
+        )
+
+      assert {:error, _} = Ash.update(sandbox, %{}, action: :record_request, authorize?: false)
+    end
+
+    test "last_request_at is nullable, because 'never requested' has to be sayable" do
+      attr = Ash.Resource.Info.attribute(SandboxRegistry, :last_request_at)
+
+      assert attr.type == Ash.Type.UtcDatetimeUsec
+      assert attr.allow_nil?
+    end
+
+    test "record_request accepts no attributes directly" do
+      # `accept []`. The attribute is reachable only through the argument, so
+      # there is no second way to write it that could skip the semantics above.
+      action = Ash.Resource.Info.action(SandboxRegistry, :record_request)
+
+      assert action.type == :update
+      assert action.accept == []
+      assert [%{name: :observed_at, allow_nil?: false}] = action.arguments
+    end
+  end
 end

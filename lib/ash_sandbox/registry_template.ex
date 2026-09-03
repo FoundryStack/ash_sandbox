@@ -293,16 +293,28 @@ defmodule AshSandbox.RegistryTemplate do
         attribute :data_store_ref, :string, public?: true
         attribute :data_store_placement, :string, public?: true
 
-        # ⚠️ `last_request_at` stood here, described as driving idle-stop
-        # (`003-FR-016`). Nothing ever wrote it: the `touch` action that set it
-        # had no caller in any host, so the *input* to an idle decision was
-        # always `nil` and `005`'s idle-stop was never implementable against
-        # it. `022`'s spec recorded this and it stayed. The column is removed
+        # ⚠️ `last_request_at` was REMOVED here once, and is back under the
+        # condition the removal note set. That note read: nothing ever wrote
+        # it -- the `touch` action that set it had no caller in any host, so
+        # the *input* to an idle decision was always `nil` and `005`'s
+        # idle-stop was never implementable against it. The column was removed
         # rather than left nullable, because a timestamp named
         # `last_request_at` reads as evidence that requests are being tracked.
+        # It closed: *"Reviving idle-stop means adding the write path first and
+        # this column with it."*
         #
-        # Reviving idle-stop means adding the write path first and this column
-        # with it.
+        # `restore-idle-stop` does exactly that, in one change:
+        # `Axonn.Workers.RequestActivityScrapeWorker` reads Caddy's per-host
+        # request counter and calls `record_request` below, and
+        # `Axonn.Workers.IdleSandboxSweepWorker` reads what it wrote.
+        #
+        # ⚠️ Nullable, and `nil` is a MEANING rather than a missing value: a
+        # sandbox that has been provisioned but never requested. The sweep must
+        # read that as "no evidence" and not as "idle since the epoch". A null
+        # constraint cannot say that, so it is said by the scenario
+        # {#sandbox/an-absent-or-stale-activity-signal-shall-not-be-read-as-idleness/S1}
+        # instead.
+        attribute :last_request_at, :utc_datetime_usec, public?: true
 
         # Set on every transition, so an operation's duration is derivable from
         # the record rather than only from the emitting call site.
@@ -498,6 +510,33 @@ defmodule AshSandbox.RegistryTemplate do
           change atomic_update(:state_changed_at, expr(now()))
         end
 
+        update :record_request do
+          description """
+          Records that this sandbox served a request, at the time the
+          observation covers rather than at the time of the write.
+
+          The observation is second-hand and late: the platform is not on the
+          tenant data path, so activity is learned by asking the proxy after
+          an interval has already closed. `DateTime.utc_now/0` here would
+          therefore be wrong by up to one scrape interval in the direction
+          that matters -- it would make every observed sandbox look more
+          recently used than it is, and an idle sweep reading it would keep a
+          sandbox alive on the strength of the scrape's own clock.
+
+          Taking the time as an argument also makes it pinnable: a caller can
+          supply a value a test chose, which a defaulted `now()` cannot.
+
+          ⚠️ Not named `touch`. That was the name of the action removed for
+          having no caller, and reusing it would make `git log` read as though
+          the old one came back.
+          """
+
+          accept []
+          argument :observed_at, :utc_datetime_usec, allow_nil?: false
+
+          change set_attribute(:last_request_at, arg(:observed_at))
+        end
+
         update :mark_destroyed do
           description """
           Records that the sandbox is gone and clears its address. The row is
@@ -521,7 +560,7 @@ defmodule AshSandbox.RegistryTemplate do
       ## What is deliberately withheld
 
       `environment_ref`, `data_store_ref`, `data_store_placement`, `address`,
-      `state`, `state_changed_at`, and the timestamps.
+      `state`, `state_changed_at`, `last_request_at`, and the timestamps.
 
       Each is registry bookkeeping. A mechanism that needed any of them would be
       reaching into host concepts — and `state` above all, because a mechanism
