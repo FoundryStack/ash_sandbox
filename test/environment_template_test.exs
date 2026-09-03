@@ -129,4 +129,63 @@ defmodule AshSandbox.EnvironmentTemplateTest do
       assert project!("owner-c", name).name == project!("owner-d", name).name
     end
   end
+
+  # ⚠️ These two live here, in the library, and not in the host, because the
+  # host can no longer reach them. `Axonn.Sandbox.Changes.DeriveAvailability`
+  # computes `availability_mode` and writes the matching timeout in the same
+  # breath -- the platform default when it lands `:on_demand` with none given,
+  # `nil` when it lands `:always_running` -- so neither refusal below has a
+  # reachable caller once a host names an `availability_derivation:`. This
+  # binding names none, so the un-derived template is live here and this is the
+  # last place in the repository where these validations can be observed
+  # failing. Without this block someone could delete either `validate` and the
+  # whole suite would stay green, which is the definition of a check nobody has
+  # watched fail.
+  describe "⚠️ the timeout validations, where they are still reachable (003-FR-016)" do
+    test "an on_demand environment with no idle timeout is refused, by that message" do
+      project = project!()
+
+      {:error, error} =
+        Ash.create(
+          Environment,
+          %{
+            project_id: project.id,
+            name: unique("env"),
+            target_stack: :elixir,
+            template_name: "elixir-1.20",
+            availability_mode: :on_demand,
+            idle_timeout_seconds: nil
+          },
+          action: :create,
+          authorize?: false
+        )
+
+      assert %Ash.Error.Invalid{} = error
+
+      assert Exception.message(error) =~
+               "an on_demand environment needs an idle timeout (003-FR-016)"
+    end
+
+    test "an always_running environment carrying an idle timeout is refused, by that message" do
+      project = project!()
+
+      {:error, error} =
+        Ash.create(
+          Environment,
+          %{
+            project_id: project.id,
+            name: unique("env"),
+            target_stack: :elixir,
+            template_name: "elixir-1.20",
+            availability_mode: :always_running,
+            idle_timeout_seconds: 300
+          },
+          action: :create,
+          authorize?: false
+        )
+
+      assert %Ash.Error.Invalid{} = error
+      assert Exception.message(error) =~ "an always_running environment has no idle timeout"
+    end
+  end
 end
