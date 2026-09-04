@@ -155,16 +155,17 @@ defmodule AshSandbox.RegistryTemplateTest do
 
   describe "one sandbox per environment (003-FR-010, research R7)" do
     test "a second provision for the same environment returns the first sandbox" do
-      env = "env-" <> Integer.to_string(System.unique_integer([:positive]))
+      unique = Integer.to_string(System.unique_integer([:positive]))
+      env = "env-" <> unique
 
       {:ok, first} =
-        Ash.create(SandboxRegistry, %{id: "a", owner_ref: "o", environment_ref: env},
+        Ash.create(SandboxRegistry, %{id: "a-" <> unique, owner_ref: "o", environment_ref: env},
           action: :provision,
           authorize?: false
         )
 
       {:ok, second} =
-        Ash.create(SandboxRegistry, %{id: "b", owner_ref: "o", environment_ref: env},
+        Ash.create(SandboxRegistry, %{id: "b-" <> unique, owner_ref: "o", environment_ref: env},
           action: :provision,
           authorize?: false
         )
@@ -175,12 +176,18 @@ defmodule AshSandbox.RegistryTemplateTest do
     end
 
     test "the second provision does not overwrite the first's attributes" do
-      env = "env-" <> Integer.to_string(System.unique_integer([:positive]))
+      unique = Integer.to_string(System.unique_integer([:positive]))
+      env = "env-" <> unique
 
       {:ok, first} =
         Ash.create(
           SandboxRegistry,
-          %{id: "a", owner_ref: "o", environment_ref: env, template_ref: "elixir-1.20"},
+          %{
+            id: "a-" <> unique,
+            owner_ref: "o",
+            environment_ref: env,
+            template_ref: "elixir-1.20"
+          },
           action: :provision,
           authorize?: false
         )
@@ -188,7 +195,12 @@ defmodule AshSandbox.RegistryTemplateTest do
       {:ok, second} =
         Ash.create(
           SandboxRegistry,
-          %{id: "b", owner_ref: "o", environment_ref: env, template_ref: "python-3.13"},
+          %{
+            id: "b-" <> unique,
+            owner_ref: "o",
+            environment_ref: env,
+            template_ref: "python-3.13"
+          },
           action: :provision,
           authorize?: false
         )
