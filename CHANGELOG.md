@@ -12,3 +12,32 @@ Public interface at extraction: `AshSandbox.RegistryTemplate`, `AshSandbox.Proje
 
 `AshSandbox.RunPolicy`, the `AshSandbox.Resource` DSL extension, and `AshSandbox.Plug` were
 withdrawn from the umbrella before extraction (R-12) and do not exist in this package.
+
+### Fixed during extraction
+
+**Update actions raised `MustBeAtomic` on every non-PostgreSQL data layer.** MEASURED 2026-09-10:
+each of the registry's seven `mark_*` transitions and the project's `:rename` failed on
+`Ash.DataLayer.Ets`, while passing on PostgreSQL. An identity carrying `pre_check_with` makes Ash
+add an `eager_validate_identities` `before_action` hook, and any `before_action` hook makes an
+update non-atomic. This falsified `012-FR-009`, the data-layer independence these templates exist
+to provide — and no test had caught it, because the ETS host app in `test/support/host_app.ex` had
+only ever been read from and created through, never updated through.
+
+`AshSandbox.Internal.DataLayerSection.require_atomic/1` now emits `require_atomic?(false)` for
+every data layer except `AshPostgres.DataLayer`, which keeps the atomicity `expr(now())` buys where
+it is available. `:record_request` is unchanged: it already carried an unconditional
+`require_atomic? false` for its own reason.
+
+### Documentation
+
+The package now ships a Diátaxis documentation set under `docs/`, published as ExDoc extras: a
+`getting-started` tutorial executed as a test (`test/getting_started_doc_test.exs`), two how-to
+guides, an explanation of why the host owns the resource module, and reference pages decoding the
+requirement IDs and the citations to the originating umbrella.
+
+`test/public_interface_test.exs` asserts that the four statements of the public interface —
+`use Boundary`'s `exports:`, `priv/boundary.md`, the `AshSandbox` moduledoc, and the README — name
+the same seven modules, and that the shipped boundary document resolves through
+`Application.app_dir/2`. The moduledoc had drifted to naming one module of the seven.
+
+`mix precommit` now runs `mix docs --warnings-as-errors`.
