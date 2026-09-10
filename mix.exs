@@ -1,7 +1,7 @@
 defmodule AshSandbox.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @source_url "https://github.com/FoundryStack/ash_sandbox"
 
   def project do
@@ -152,7 +152,23 @@ defmodule AshSandbox.MixProject do
   # `:boundary` only where it is declared -- see the dependency's own note. In
   # `:prod` this is the plain default list, so a consumer that never resolves
   # `:boundary` can still compile this app.
-  defp compilers(env) when env in [:dev, :test], do: [:boundary] ++ Mix.compilers()
+  #
+  # `Mix.env()` is global to the whole `mix` invocation, not scoped to this
+  # app -- so a consumer building in `:dev`/`:test` (every umbrella app does)
+  # hits this branch too, for OUR self-check, not theirs. `:boundary` is
+  # `only: [:dev, :test]` on OUR deps list, which governs whether it is
+  # fetched for a consumer, not whether this branch tries to use it. Gate on
+  # whether it actually loaded: this app's own dev/test runs always have it
+  # (it's in mix.lock, compiled ahead of this app), a consumer that never
+  # pulled it in gets the plain list instead of a compile error.
+  defp compilers(env) when env in [:dev, :test] do
+    if Code.ensure_loaded?(Boundary) do
+      [:boundary | Mix.compilers()]
+    else
+      Mix.compilers()
+    end
+  end
+
   defp compilers(_env), do: Mix.compilers()
 
   defp deps do

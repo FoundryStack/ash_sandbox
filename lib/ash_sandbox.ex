@@ -127,16 +127,29 @@ defmodule AshSandbox do
   # `exports:` is the published surface `@moduledoc` above lists, and it
   # excludes `AshSandbox.Internal.*` by naming what is public rather than by
   # denying what is not.
-  use Boundary,
-    deps: [],
-    check: [aliases: true, apps: [axonn: :compile, axonn: :runtime]],
-    exports: [
-      EncryptedSecret,
-      EnvironmentTemplate,
-      OperationRecordTemplate,
-      ProjectTemplate,
-      RegistryTemplate,
-      SandboxCredentialTemplate,
-      TemplateTemplate
-    ]
+  #
+  # ⚠️ Guarded on `Code.ensure_loaded?/1`, not just on `compilers/1` in
+  # mix.exs. `compilers/1` only decides whether the separate `Boundary.MixCompiler`
+  # analysis PASS runs; `use Boundary` is macro expansion of THIS file, which
+  # happens regardless of that list. `:boundary` is `only: [:dev, :test]` on
+  # this package's OWN deps, which Mix does not add to a *consumer's* build
+  # path when this package is pulled in as a dependency rather than compiled
+  # as the top-level project -- so any :dev/:test consumer (every umbrella
+  # app included) hit `module Boundary is not loaded` here without this
+  # guard, even though `check.apps` naming `:axonn` makes plain this block
+  # was never meant to run anywhere but this library's own tree.
+  if Code.ensure_loaded?(Boundary) do
+    use Boundary,
+      deps: [],
+      check: [aliases: true, apps: [axonn: :compile, axonn: :runtime]],
+      exports: [
+        EncryptedSecret,
+        EnvironmentTemplate,
+        OperationRecordTemplate,
+        ProjectTemplate,
+        RegistryTemplate,
+        SandboxCredentialTemplate,
+        TemplateTemplate
+      ]
+  end
 end

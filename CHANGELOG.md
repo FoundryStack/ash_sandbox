@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 — 2026-09-10
+
+**Fixed: every consumer's `:dev`/`:test` build failed to compile this package.**
+`compilers/1` (mix.exs) and `AshSandbox`'s `use Boundary` declaration both ran unconditionally
+whenever the GLOBAL `Mix.env()` was `:dev` or `:test` — which is every umbrella app's env, not just
+this package's own. `:boundary` is `only: [:dev, :test]` on this package's own deps, scoped there so
+a consumer never has to resolve it; a first real Hex consumer hit `module Boundary is not loaded and
+could not be found` at `lib/ash_sandbox.ex:130` the moment it built in `:dev`, because nothing made
+either use of `Boundary` conditional on the module actually being present.
+
+Both are now gated on `Code.ensure_loaded?(Boundary)`. `use Boundary` additionally moved into a
+`Code.eval_quoted/3` block — `use` inside a plain `if` still expands unconditionally at compile time
+(confirmed against Elixir 1.20.2), so wrapping it in `if` alone does not defer it.
+
 ## 0.1.0 — 2026-09-10
 
 Extracted from the Axonn umbrella (`apps/ash_sandbox`) into a standalone package, carrying its
