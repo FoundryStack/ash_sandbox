@@ -1,19 +1,23 @@
 defmodule AshSandbox.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+  @source_url "https://github.com/FoundryStack/ash_sandbox"
+
   def project do
     [
       app: :ash_sandbox,
-      version: "0.1.0",
-      build_path: "../../_build",
-      config_path: "../../config/config.exs",
-      deps_path: "../../deps",
-      lockfile: "../../mix.lock",
+      version: @version,
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      name: "AshSandbox",
+      description: description(),
+      package: package(),
+      docs: docs(),
+      source_url: @source_url,
       # ⚠️ BEFORE `Mix.compilers()`, which reads backwards and is not a typo.
       # `:boundary` is not a pass over already-compiled output: its `run/1`
       # opens the ETS tables and installs the compiler tracer that `:elixir`
@@ -24,10 +28,11 @@ defmodule AshSandbox.MixProject do
       # `Boundary.Mix.CompilerState.initialize_module/1` -- the tracer fires
       # before the table it writes to exists.
       #
-      # This is the ONLY app in the umbrella with `:boundary` here. See
-      # `apps/axonn/mix.exs` and
-      # `openspec/changes/enforce-the-domain-graph/scr/001-boundary-cannot-express-the-measured-graph.md`
-      # for the two findings that keep it out of the other two.
+      # From this app's time in the Axonn umbrella: it was the ONLY app there
+      # with `:boundary` here, for two findings recorded against
+      # `Boundary.Checker.errors/2`'s unconditional cycle detection and an
+      # `@opts` attribute collision with `Spark.Dsl` -- see this module's own
+      # `use Boundary` note below for the shape of the check itself.
       compilers: compilers(Mix.env())
     ]
   end
@@ -36,6 +41,92 @@ defmodule AshSandbox.MixProject do
     [
       extra_applications: [:logger],
       mod: {AshSandbox.Application, []}
+    ]
+  end
+
+  defp description do
+    "Ash resources modelling sandbox lifecycle, over ex_sandbox -- templates a host " <>
+      "`use`s to get a working sandbox registry, project, environment and credential " <>
+      "store without writing its own Ash.Domain from scratch."
+  end
+
+  defp package do
+    [
+      name: "ash_sandbox",
+      licenses: ["Apache-2.0"],
+      links: %{
+        "GitHub" => @source_url,
+        "Changelog" => @source_url <> "/blob/main/CHANGELOG.md"
+      },
+      # `docs` and `CHANGELOG.md` ship because `docs/0`'s `extras:` names them:
+      # `mix hex.publish` builds the documentation from the working directory,
+      # but a consumer reading the tarball -- or anyone rebuilding docs from an
+      # unpacked release -- gets a broken `extras:` without them. `priv` is
+      # separately load-bearing and has its own reason: see `priv/boundary.md`.
+      files: ~w(lib priv docs mix.exs README.md CHANGELOG.md LICENSE)
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_ref: "v#{@version}",
+      source_url: @source_url,
+      # ⚠️ Every name here is one a document has to spell out and ExDoc cannot
+      # resolve, which is the exact combination that turns a correct document
+      # into a failed build under `--warnings-as-errors`.
+      #
+      # `AshSandbox.Application` is `@moduledoc false`, and `priv/boundary.md`
+      # names it in backticks in the row declaring it PRIVATE -- naming it is
+      # the whole point of that row, and the strict parser that reads the table
+      # requires the backticks. `ex_sandbox` hit this first and recorded it:
+      # de-linking the name trades a build failure for a silent contract
+      # failure, which is the worse of the two.
+      #
+      # The other three do not exist at all. They were withdrawn (R-12) and the
+      # README, the CHANGELOG and `AshSandbox`'s own moduledoc each name them
+      # to say so. An entry announcing a REMOVAL has to spell the full name, so
+      # the cost of keeping the name exact is a line here.
+      skip_code_autolink_to: [
+        "AshSandbox.Application",
+        "AshSandbox.RunPolicy",
+        "AshSandbox.Resource",
+        "AshSandbox.Plug"
+      ],
+      extras: [
+        "README.md",
+        "docs/getting-started.md",
+        "docs/how-to/choose-a-template.md",
+        "docs/how-to/encrypt-a-credential.md",
+        "docs/explanation/why-the-host-owns-the-module.md",
+        "priv/boundary.md",
+        "CHANGELOG.md",
+        "docs/requirement-ids.md",
+        "docs/provenance.md"
+      ],
+      # Diataxis, and the grouping is the navigation: a reader who wants to
+      # *do* something and a reader who wants to *understand* something are
+      # looking for different pages, and one flat sidebar makes them read each
+      # other's.
+      groups_for_extras: [
+        Tutorial: ["docs/getting-started.md"],
+        "How-to": [~r{docs/how-to/}],
+        Reference: ["priv/boundary.md", "CHANGELOG.md"],
+        Explanation: [~r{docs/explanation/}, "docs/requirement-ids.md", "docs/provenance.md"]
+      ],
+      # ⚠️ `AshSandbox.Internal.*` is grouped rather than hidden. Four of the
+      # five carry real reasoning in their moduledocs -- why refusing an
+      # allowlist change is the honest shape, why the owner check is a filter
+      # and not a bypass -- and `@moduledoc false` would delete that prose from
+      # the only place a reader looks for it. The group name is what says
+      # "private": `priv/boundary.md` is the contract, and being documented is
+      # not being public.
+      groups_for_modules: [
+        Interface: [AshSandbox],
+        Templates: [~r/^AshSandbox\.\w+Template$/],
+        Types: [AshSandbox.EncryptedSecret],
+        "Internal (private -- no compatibility promise)": [~r/^AshSandbox\.Internal\./]
+      ]
     ]
   end
 
@@ -103,7 +194,12 @@ defmodule AshSandbox.MixProject do
       # could introduce an upward reference still runs the compiler. Only a
       # `:prod` build skips it, and a `:prod` build is not where the reference
       # gets written.
-      {:boundary, "~> 0.10", runtime: false, only: [:dev, :test]}
+      {:boundary, "~> 0.10", runtime: false, only: [:dev, :test]},
+      # `only: :dev` for the same reason `:boundary` is scoped: a consumer
+      # resolving this package from Hex compiles it with this project file, and
+      # a documentation tool is not a build requirement of anything that
+      # depends on this library.
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end
 
@@ -119,21 +215,21 @@ defmodule AshSandbox.MixProject do
     [
       precommit: [
         "compile --warnings-as-errors --force",
-        # No `deps.unlock --check-unused` here. This app's `lockfile` points at
-        # the umbrella's SHARED `../../mix.lock`, so the check can only ever be
-        # meaningful when run against every app's `deps()` at once -- which is
-        # exactly what root `mix.exs`'s own `precommit` alias does, and its gate
-        # already covers this file. Run scoped to just this directory (as CI's
-        # library-boundary job does, deliberately, so a root-level `deps.get`
-        # doesn't leave this child unlocked) it sees only `deps/0` below and
-        # reports every package the REST of the umbrella needs -- phoenix,
-        # ash_postgres, oban, all of it -- as unused. Not flaky: MEASURED, it
-        # fails 100% of the time. It used to "pass" here because the alias ran
-        # the mutating `deps.unlock --unused` instead, which -- per the root
-        # `mix.exs` comment on the same anti-pattern -- exits 0 regardless of
-        # what it finds and so was never actually gating anything.
-        # ⚠️ It was listed twice, which did nothing the once did not.
+        "deps.unlock --check-unused",
         "format --check-formatted",
+        # ⚠️ A real gate step, not a courtesy. `mix docs --warnings-as-errors`
+        # rejects a broken autolink, a missing `extras:` entry and a reference
+        # to a hidden module -- the three ways a documentation change breaks
+        # without breaking a test. `ex_sandbox` learned this the expensive way:
+        # its first push failed on a defect that had been committed and locally
+        # green for two commits, because only CI ran the docs build.
+        #
+        # ⚠️ `cmd`, and via `MIX_ENV=dev`, because `ex_doc` is `only: :dev`
+        # while `preferred_envs` puts this whole alias in `:test`. Written as a
+        # plain `"docs --warnings-as-errors"` step it fails with `The task
+        # "docs" could not be found` -- a gate reporting a missing task rather
+        # than a documentation defect.
+        "cmd env MIX_ENV=dev mix docs --warnings-as-errors",
         "test"
       ]
     ]

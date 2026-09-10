@@ -59,4 +59,34 @@ defmodule AshSandbox.Internal.DataLayerSection do
   # refuses to compile the resource without one.
   def pre_check_with(AshPostgres.DataLayer, _domain), do: []
   def pre_check_with(_other, domain), do: [pre_check_with: domain]
+
+  @doc false
+  # `require_atomic?(false)`, or nothing -- the `pre_check_with/2` note above
+  # read in the other direction, and the reason it is a function rather than a
+  # line written into each action.
+  #
+  # An identity carrying `pre_check_with` makes Ash add an
+  # `eager_validate_identities` hook to the `before_action` phase of every
+  # action on the resource, and ANY `before_action` hook makes an update
+  # non-atomic. MEASURED 2026-09-10, on the test host application this library
+  # ships: every `mark_*` transition on the registry and `:rename` on a project
+  # raised `MustBeAtomic` on `Ash.DataLayer.Ets` while passing on PostgreSQL --
+  # so templates whose whole claim is data-layer independence (`012-FR-009`)
+  # worked on one data layer. Nothing caught it because no test in this library
+  # ran an update against the ETS host.
+  #
+  # ⚠️ Conditional rather than unconditional, unlike the three call sites that
+  # predate this helper. Those each argue why their own action loses nothing by
+  # being non-atomic -- last-observation-wins, or a hook they already have. A
+  # state transition is not in that class: on PostgreSQL these actions really
+  # are atomic, `expr(now())` is what keeps them so, and turning that off for
+  # every consumer to make ETS compile would pay for one data layer out of the
+  # other's guarantee.
+  def require_atomic(AshPostgres.DataLayer), do: nil
+
+  def require_atomic(_other) do
+    quote do
+      require_atomic?(false)
+    end
+  end
 end

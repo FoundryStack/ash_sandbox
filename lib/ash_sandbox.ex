@@ -9,8 +9,33 @@ defmodule AshSandbox do
 
   ## Public interface
 
-    * `AshSandbox.RegistryTemplate` — `__using__/1` template; **the host**
-      declares data layer, repo, table, and domain
+  Seven modules, and no more. `priv/boundary.md` carries the same list with a
+  purpose and a stability note against each row; it ships inside the package,
+  and it is the copy a consumer parses rather than one it keeps by hand.
+
+    * `AshSandbox.RegistryTemplate` — the sandbox record itself
+    * `AshSandbox.ProjectTemplate` — a named grouping of environments under one
+      `owner_ref`
+    * `AshSandbox.EnvironmentTemplate` — carries `target_stack`, which is what
+      selects a mechanism
+    * `AshSandbox.TemplateTemplate` — the base image or release a sandbox
+      provisions from (`003-FR-008`)
+    * `AshSandbox.OperationRecordTemplate` — lifecycle outcomes with
+      attribution, stored rather than traversed (`003-FR-025`)
+    * `AshSandbox.SandboxCredentialTemplate` — the per-sandbox database role
+      (`003-FR-018`–`FR-021`)
+    * `AshSandbox.EncryptedSecret` — `Ash.Type` encrypting a value before it
+      reaches the data layer (`003-FR-021`). Public **by consequence**: a host
+      declaring `SandboxCredentialTemplate` receives the type as its `secret`
+      attribute's type, so it is in that host's compiled surface whether or not
+      it ever names the module
+
+  The first six are `__using__/1` templates and share one shape — **the host**
+  declares data layer, repo, table, and domain. There are six rather than one
+  because every resource modelled here needs the host to own its declaration
+  for the same reason; "This library ships no concrete resource module" below
+  is that reason.
+
   ⚠️ Three modules were withdrawn from this list (R-12): `AshSandbox.RunPolicy`,
   the `AshSandbox.Resource` DSL extension, and `AshSandbox.Plug`. All three were
   correct, tested, and reachable only from each other -- the plug was the sole

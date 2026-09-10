@@ -412,6 +412,8 @@ defmodule AshSandbox.RegistryTemplate do
           the address, and where the sandbox's data store actually landed.
           """
 
+          unquote(AshSandbox.Internal.DataLayerSection.require_atomic(data_layer))
+
           # `data_store_ref` and `data_store_placement` are accepted here, not
           # only at `:provision`, because they are not known when the row is
           # created: the row is created *first* so that a crash mid-saga leaves
@@ -435,6 +437,8 @@ defmodule AshSandbox.RegistryTemplate do
           reporting a fault can tell "start in progress" from "not running".
           """
 
+          unquote(AshSandbox.Internal.DataLayerSection.require_atomic(data_layer))
+
           accept []
           change set_attribute(:state, :starting)
           change atomic_update(:state_changed_at, expr(now()))
@@ -451,6 +455,8 @@ defmodule AshSandbox.RegistryTemplate do
           than merely accepted: a running row with no address is a sandbox
           nothing can reach while everything reports it healthy.
           """
+
+          unquote(AshSandbox.Internal.DataLayerSection.require_atomic(data_layer))
 
           accept [:mechanism_ref, :address]
 
@@ -470,6 +476,8 @@ defmodule AshSandbox.RegistryTemplate do
           distinguishable from a sandbox that has already stopped.
           """
 
+          unquote(AshSandbox.Internal.DataLayerSection.require_atomic(data_layer))
+
           accept []
           change set_attribute(:state, :stopping)
           change atomic_update(:state_changed_at, expr(now()))
@@ -485,6 +493,8 @@ defmodule AshSandbox.RegistryTemplate do
           stale address that reads as current.
           """
 
+          unquote(AshSandbox.Internal.DataLayerSection.require_atomic(data_layer))
+
           accept []
           change set_attribute(:state, :stopped)
           change set_attribute(:address, nil)
@@ -498,6 +508,8 @@ defmodule AshSandbox.RegistryTemplate do
           cannot invent a reason and collapse the distinguishable causes into
           one generic error.
           """
+
+          unquote(AshSandbox.Internal.DataLayerSection.require_atomic(data_layer))
 
           # An atom from the closed set, so a caller cannot invent a reason.
           argument :reason, :atom, allow_nil?: false
@@ -559,6 +571,8 @@ defmodule AshSandbox.RegistryTemplate do
           retained rather than deleted, so what existed stays answerable after
           the thing it recorded does not.
           """
+
+          unquote(AshSandbox.Internal.DataLayerSection.require_atomic(data_layer))
 
           accept []
           change set_attribute(:state, :destroyed)

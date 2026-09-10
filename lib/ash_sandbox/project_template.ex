@@ -106,6 +106,8 @@ defmodule AshSandbox.ProjectTemplate do
           boundary separating them.
           """)
 
+          unquote(AshSandbox.Internal.DataLayerSection.require_atomic(data_layer))
+
           accept([:name])
         end
       end
