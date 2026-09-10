@@ -107,7 +107,7 @@ orphan sweeps. It legitimately spans owners, and it is reached at the call site 
 a policy bypass, so a request that *does* carry an actor can never take this path. Pass `actor:`
 instead and every read is filtered to that actor's `owner_ref`.
 
-Four details that will save you an afternoon:
+Five details that will save you an afternoon:
 
 * **`owner_ref` is opaque.** The library stores it, compares it, and never parses, resolves or
   joins against it. `"acct_42"` here is a string with no meaning to this library at all. Yours can
@@ -119,6 +119,11 @@ Four details that will save you an afternoon:
   from "development was stated". It defaults to `:development`, which is the safe half: a host
   deriving availability from it is then wrong in the direction that costs a cold start rather than
   the direction that keeps paying for an idle production sandbox.
+* **`idle_timeout_seconds` is required here**, because the default availability mode is
+  `:on_demand` and an on-demand environment nobody idle-stops is an always-running one that nobody
+  said was always-running. Pass `availability_mode: :always_running` instead and the timeout is
+  *refused* rather than ignored — a recorded idle timeout that never applies is a value someone
+  reads later and acts on.
 * **An empty or absent `network_allowlist` means reach nothing**, not reach everything. Default-deny
   has to survive its own rollout.
 
@@ -188,14 +193,28 @@ running" are the same value.
 `address` is *required* by `:mark_running`, not merely accepted. A `running` row with no address is
 a sandbox nothing can reach while every dashboard reports it healthy.
 
-Try it without one:
+Try it on a sandbox that never got one:
 
 ```elixir
-sandbox
+{:ok, addressless} =
+  Tour.Sandbox
+  |> Ash.Changeset.for_create(:provision, %{
+    id: "sbx_02",
+    owner_ref: project.owner_ref,
+    environment_ref: "some-other-environment"
+  })
+  |> Ash.create(authorize?: false)
+
+addressless
 |> Ash.Changeset.for_update(:mark_running, %{})
 |> Ash.update(authorize?: false)
 # => {:error, ...} "a sandbox cannot be running without a recorded address (003-FR-022)"
 ```
+
+⚠️ The validation reads the **record**, not the changeset, so running `:mark_running` with no
+arguments on `sandbox` — which already recorded an address at `:mark_provisioned` — succeeds. That
+is the intended reading: the requirement is that a `running` row has an address, not that every
+transition restates one.
 
 ## 6. Fail it
 
@@ -203,11 +222,15 @@ sandbox
 {:ok, failed} =
   sandbox
   |> Ash.Changeset.for_update(:mark_failed, %{
-    failure_reason: :template_missing,
-    failure_detail: "no template elixir-1.18 for stack :elixir"
+    reason: :template_missing,
+    detail: "no template elixir-1.18 for stack :elixir"
   })
   |> Ash.update(authorize?: false)
 ```
+
+Note the input names: the action takes `reason` and `detail` as **arguments**, and stores them as
+`failure_reason` and `failure_detail`. `accept []` is deliberate — a caller cannot write those two
+attributes directly, only through this action.
 
 `failure_reason` is a **closed set** — `:timeout`, `:resource_cap`, `:template_missing`,
 `:host_unreachable`, `:mechanism_error` — constrained on the resource. A free-text field would
@@ -219,7 +242,7 @@ Now try an invalid one:
 
 ```elixir
 sandbox
-|> Ash.Changeset.for_update(:mark_failed, %{failure_reason: :something_went_wrong})
+|> Ash.Changeset.for_update(:mark_failed, %{reason: :something_went_wrong})
 |> Ash.update(authorize?: false)
 # => {:error, ...} invalid value for :failure_reason
 ```

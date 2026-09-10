@@ -83,12 +83,27 @@ defmodule AshSandbox.MixProject do
       # de-linking the name trades a build failure for a silent contract
       # failure, which is the worse of the two.
       #
+      # `AshSandbox.Application.start/2` is the same module, named with an
+      # arity from `EncryptedSecret.warm/0`'s own `@doc` -- ExDoc matches the
+      # bare name and the `fun/arity` form separately, so both need an entry.
+      #
+      # `AshSandbox.Internal.DataLayerSection` (and its `require_atomic/1`,
+      # `pre_check_with/2`) is `@moduledoc false` for the reason `AshSandbox`'s
+      # own moduledoc gives for the whole `Internal` namespace: documented
+      # without being public. The how-to and explanation pages name it to say
+      # exactly that, which is the same "the whole point of the reference"
+      # shape as `AshSandbox.Application` above.
+      #
       # The other three do not exist at all. They were withdrawn (R-12) and the
       # README, the CHANGELOG and `AshSandbox`'s own moduledoc each name them
       # to say so. An entry announcing a REMOVAL has to spell the full name, so
       # the cost of keeping the name exact is a line here.
       skip_code_autolink_to: [
         "AshSandbox.Application",
+        "AshSandbox.Application.start/2",
+        "AshSandbox.Internal.DataLayerSection",
+        "AshSandbox.Internal.DataLayerSection.require_atomic/1",
+        "AshSandbox.Internal.DataLayerSection.pre_check_with/2",
         "AshSandbox.RunPolicy",
         "AshSandbox.Resource",
         "AshSandbox.Plug"
