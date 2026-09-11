@@ -138,18 +138,31 @@ defmodule AshSandbox do
   # app included) hit `module Boundary is not loaded` here without this
   # guard, even though `check.apps` naming `:axonn` makes plain this block
   # was never meant to run anywhere but this library's own tree.
+  #
+  # ⚠️ `if Code.ensure_loaded?(Boundary) do use Boundary, ... end` alone is NOT
+  # enough (this shipped broken in 0.1.1) -- `use` inside a plain `if` still
+  # expands at compile time regardless of the branch, confirmed against
+  # Elixir 1.20.2 with an isolated `elixirc` repro naming a nonexistent
+  # module. `Code.eval_quoted/3` genuinely defers expansion until the `if`
+  # actually runs.
   if Code.ensure_loaded?(Boundary) do
-    use Boundary,
-      deps: [],
-      check: [aliases: true, apps: [axonn: :compile, axonn: :runtime]],
-      exports: [
-        EncryptedSecret,
-        EnvironmentTemplate,
-        OperationRecordTemplate,
-        ProjectTemplate,
-        RegistryTemplate,
-        SandboxCredentialTemplate,
-        TemplateTemplate
-      ]
+    Code.eval_quoted(
+      quote do
+        use Boundary,
+          deps: [],
+          check: [aliases: true, apps: [axonn: :compile, axonn: :runtime]],
+          exports: [
+            EncryptedSecret,
+            EnvironmentTemplate,
+            OperationRecordTemplate,
+            ProjectTemplate,
+            RegistryTemplate,
+            SandboxCredentialTemplate,
+            TemplateTemplate
+          ]
+      end,
+      [],
+      __ENV__
+    )
   end
 end

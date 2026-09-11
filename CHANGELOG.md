@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2 — 2026-09-11
+
+**0.1.1's fix was incomplete and still crashed.** It wrapped `use Boundary` in a plain
+`if Code.ensure_loaded?(Boundary) do use Boundary, ... end`, which does not work: `use` inside a
+plain `if` still expands at compile time regardless of the branch (confirmed against Elixir 1.20.2
+with an isolated `elixirc` repro naming a nonexistent module). Any `:dev`/`:test` consumer that does
+not itself depend on `:boundary` still hit `module Boundary is not loaded and could not be found`.
+
+`use Boundary` is now wrapped in `Code.eval_quoted/3`, which genuinely defers macro expansion until
+the `if` branch runs.
+
 ## 0.1.1 — 2026-09-10
 
 **Fixed: every consumer's `:dev`/`:test` build failed to compile this package.**
