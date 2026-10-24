@@ -112,6 +112,7 @@ defmodule AshSandbox.EnvironmentTemplate do
       use Ash.Resource,
         domain: unquote(domain),
         data_layer: unquote(data_layer),
+        extensions: unquote(Keyword.get(opts, :extensions, [])),
         authorizers: [Ash.Policy.Authorizer]
 
       # Load-bearing (003 T050): these records are not schema-isolated, so this

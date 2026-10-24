@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 — 2026-10-25
+
+### Added: every resource template forwards `extensions:`
+
+`ProjectTemplate`, `EnvironmentTemplate`, `OperationRecordTemplate` and
+`SandboxCredentialTemplate` take `extensions:` and pass it to `use Ash.Resource`, as
+`RegistryTemplate` already does. A host can declare its own Spark extensions on the binding
+instead of rewriting the template's expansion. The default is `[]`, so a 0.1 binding compiles to
+the same resource.
+
 ## 0.1.2 — 2026-09-11
 
 **0.1.1's fix was incomplete and still crashed.** It wrapped `use Boundary` in a plain

@@ -65,6 +65,7 @@ defmodule AshSandbox.SandboxCredentialTemplate do
       use Ash.Resource,
         domain: unquote(domain),
         data_layer: unquote(data_layer),
+        extensions: unquote(Keyword.get(opts, :extensions, [])),
         authorizers: [Ash.Policy.Authorizer]
 
       # `FR-021`, data-model.md §Authorization: the credential is **never**
