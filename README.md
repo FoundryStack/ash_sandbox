@@ -10,15 +10,12 @@ environment, template catalogue and credential store without writing an `Ash.Dom
 It depends on `ash` and `ex_sandbox`, and on no host application. That direction is enforced by
 the `:boundary` compiler rather than by review — see [what the library promises](priv/boundary.md).
 
-> ⚠️ **Not on Hex yet.** `0.1.0` is the extraction release. Until it is published, depend on it
-> from git.
-
 ## Installation
 
 ```elixir
 def deps do
   [
-    {:ash_sandbox, github: "FoundryStack/ash_sandbox", tag: "v0.1.0"}
+    {:ash_sandbox, "~> 0.2"}
   ]
 end
 ```

@@ -14,7 +14,7 @@ Save this as `sandbox_tour.exs`. Everything below appends to it.
 
 ```elixir
 Mix.install([
-  {:ash_sandbox, github: "FoundryStack/ash_sandbox", tag: "v0.1.0"},
+  {:ash_sandbox, "~> 0.2"},
   {:picosat_elixir, "~> 0.2"}
 ])
 ```
